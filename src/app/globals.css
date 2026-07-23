@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Blind Spot Trainer — global styles.
+ * Chess.com runs a warm-charcoal dark theme; we bake that in as the default
+ * (no light mode in scope for this prototype).
+ */
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --font-chess-sans: var(--font-inter); /* swap for licensed Chess Sans */
+  }
+
+  * {
+    @apply border-line;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Consistent focus ring across interactive elements */
+  :where(a, button, [role="button"], input, [tabindex]):focus-visible {
+    @apply outline-none ring-2 ring-brand/70 ring-offset-2 ring-offset-bg rounded-[6px];
+  }
+
+  ::selection {
+    background: rgba(129, 182, 76, 0.35);
+  }
+}
+
+@layer utilities {
+  /* Chess.com scrollbars: thin, dark, unobtrusive */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #3d3a37 transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #3d3a37;
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #4c4945;
+    background-clip: content-box;
+  }
+
+  /* Skeleton shimmer sweep */
+  .skeleton {
+    @apply relative overflow-hidden bg-surface-raised;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.06),
+      transparent
+    );
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
