@@ -137,7 +137,7 @@ export function AppShell({
       {/* Content — the page composes its own columns so the hero can span
           full width (like chess.com) with Game History + rail below it. */}
       <div className="lg:pl-[232px]">
-        <div className="mx-auto max-w-[1320px] px-3 py-5 sm:px-5 lg:px-8 lg:py-6">
+        <div className="mx-auto max-w-[1120px] px-3 py-5 sm:px-5 lg:px-6 lg:py-6">
           {children}
         </div>
       </div>

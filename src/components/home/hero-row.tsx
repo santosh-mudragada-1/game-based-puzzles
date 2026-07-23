@@ -56,8 +56,8 @@ function PreviewCard({
 /** The Chess.com home hero: quick-play + three preview cards, four across. */
 export function HeroRow() {
   return (
-    <div className="rounded-xl border border-line/70 bg-surface p-3">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="rounded-xl border border-line/70 bg-surface p-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <QuickPlayCard />
 
       {/* Puzzles — gold badge (with level) on the left; count over a thick bar */}
