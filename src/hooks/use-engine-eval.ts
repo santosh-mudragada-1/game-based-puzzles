@@ -5,9 +5,9 @@ import { getEngine, EMPTY_EVAL, type EngineEval } from "@/lib/engine";
 import type { PieceColor } from "@/types";
 
 export interface EngineEvalState extends EngineEval {
-  /** True until the first score for the current position lands. */
-  thinking: boolean;
-  /** True when the engine couldn't boot — the caller's fallback is in use. */
+  /** True once a *completed* search for the current position has landed. */
+  settled: boolean;
+  /** True when the engine couldn't run — the authored fallback is showing. */
   failed: boolean;
 }
 
@@ -16,64 +16,82 @@ interface Options {
   depth?: number;
   /** Skip analysis entirely (e.g. no puzzle on screen). */
   enabled?: boolean;
-  /**
-   * Authored eval to show while the engine is still thinking, and to keep if it
-   * fails to load — so the prototype degrades to the pre-baked numbers rather
-   * than a dead bar.
-   */
+  /** Authored eval to show before the engine's first answer, and if it fails. */
   fallback?: { cp: number; mate: number | null };
+  /**
+   * Changing this resets the reading back to `fallback` — use the puzzle id.
+   *
+   * Within a single puzzle the hook deliberately *holds* the last engine score
+   * while the next position is searched, so the bar makes one clean move per ply
+   * instead of flicking through the authored number on its way to the real one.
+   */
+  resetKey?: string | number;
 }
 
 /**
  * Evaluate a position with Stockfish, reported from `userSide`'s point of view
- * (positive = the solver is better). Scores stream in as the search deepens, and
- * a position change supersedes the previous search rather than queueing behind it.
+ * (positive = the solver is better).
+ *
+ * Only completed searches are published. Streaming every deepening score sounds
+ * nicer but re-targets the eval bar a dozen times per position, and each change
+ * restarts its transition — which reads as a stutter rather than a settle.
  */
 export function useEngineEval(
   fen: string | null,
   userSide: PieceColor,
-  { depth = 16, enabled = true, fallback }: Options = {},
+  { depth = 16, enabled = true, fallback, resetKey }: Options = {},
 ): EngineEvalState {
-  const seed = React.useMemo<EngineEval>(
-    () =>
-      fallback
-        ? { ...EMPTY_EVAL, cp: fallback.cp, mate: fallback.mate }
-        : { ...EMPTY_EVAL },
-    // Re-seed whenever the authored eval changes (i.e. a new position).
-    [fallback?.cp, fallback?.mate], // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  const fbCp = fallback?.cp ?? 0;
+  const fbMate = fallback?.mate ?? null;
+  // Kept in a ref so the search doesn't re-run just because the authored value
+  // for the next ply changed — that would defeat the hold described above.
+  const fbRef = React.useRef({ cp: fbCp, mate: fbMate });
+  fbRef.current = { cp: fbCp, mate: fbMate };
 
   const [state, setState] = React.useState<EngineEvalState>({
-    ...seed,
-    thinking: false,
+    ...EMPTY_EVAL,
+    cp: fbCp,
+    mate: fbMate,
+    settled: false,
     failed: false,
   });
 
+  // A new puzzle clears whatever the previous one left on screen.
   React.useEffect(() => {
-    if (!fen || !enabled) {
-      setState({ ...seed, thinking: false, failed: false });
-      return;
-    }
+    setState({
+      ...EMPTY_EVAL,
+      cp: fbRef.current.cp,
+      mate: fbRef.current.mate,
+      settled: false,
+      failed: false,
+    });
+  }, [resetKey]);
 
+  React.useEffect(() => {
+    if (!fen || !enabled) return;
     let live = true;
-    // Show the authored eval immediately; the engine refines it in place.
-    setState({ ...seed, thinking: true, failed: false });
+    setState((s) => ({ ...s, settled: false }));
 
     getEngine()
-      .analyse(fen, userSide, depth, (e) => {
-        if (live) setState({ ...e, thinking: true, failed: false });
-      })
+      .analyse(fen, userSide, depth)
       .then((e) => {
-        if (live) setState({ ...e, thinking: false, failed: false });
+        if (live) setState({ ...e, settled: true, failed: false });
       })
       .catch(() => {
-        if (live) setState({ ...seed, thinking: false, failed: true });
+        if (live)
+          setState({
+            ...EMPTY_EVAL,
+            cp: fbRef.current.cp,
+            mate: fbRef.current.mate,
+            settled: true,
+            failed: true,
+          });
       });
 
     return () => {
       live = false;
     };
-  }, [fen, userSide, depth, enabled, seed]);
+  }, [fen, userSide, depth, enabled]);
 
   return state;
 }

@@ -116,6 +116,12 @@ interface PuzzleEvalBarProps {
    * as the engine's best, so a "gain" there is just search wobble.
    */
   isUserMove?: boolean;
+  /**
+   * False while the engine is still working the position out. The bar holds at
+   * "what was available" until both numbers are in, so the drop plays once as a
+   * single deliberate move instead of stuttering as the search deepens.
+   */
+  ready?: boolean;
   className?: string;
 }
 
@@ -157,11 +163,14 @@ export function PuzzleEvalBar({
   loop = false,
   step,
   isUserMove = false,
+  ready = true,
   className,
 }: PuzzleEvalBarProps) {
   const reduced = usePrefersReducedMotion();
-  const fill = pct(cp);
   const peak = pct(peakCp ?? cp);
+  // Until the engine has spoken the bar sits at what was available; the drop is
+  // the first thing it does once it has real numbers.
+  const fill = ready ? pct(cp) : peak;
 
   // A move that wins evaluation back replays the band in green, once.
   const stepRef = React.useRef(step);
@@ -207,6 +216,8 @@ export function PuzzleEvalBar({
    */
   const gap = peak > fill + 0.4;
   const showPeak = Boolean(peakLabel) && gap;
+  // While holding, the bar is showing the peak — so the number must too.
+  const primary = ready ? label : (peakLabel ?? label);
 
   // With no gap the single number sits at the bottom, Chess.com style; otherwise
   // it rides the fill boundary, clear of the bar's ends and the bottom label.
@@ -280,7 +291,7 @@ export function PuzzleEvalBar({
           transition: `bottom ${FILL_MS}ms cubic-bezier(0.22,1,0.36,1)`,
         }}
       >
-        {label}
+        {primary}
       </span>
 
       {/* What was on the table, pinned at the bottom while it's still out of reach. */}

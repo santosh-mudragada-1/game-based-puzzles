@@ -325,8 +325,6 @@ export function PuzzleSolver() {
   const [wrong, setWrong] = React.useState(false);
   /** Puzzles where a wrong move was tried (they no longer count as a clean solve). */
   const [erred, setErred] = React.useState<Record<string, boolean>>({});
-  /** Puzzles finished at least once — monotonic, so the progress bar never drops. */
-  const [everDone, setEverDone] = React.useState<Record<string, boolean>>({});
   /** The theme the current session was started from (for "Solve again"). */
   const [sessionCat, setSessionCat] = React.useState<PuzzleCategory | null>(null);
   const wrongTimer = React.useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -375,6 +373,7 @@ export function PuzzleSolver() {
   const peakEval = useEngineEval(puzzle?.fen ?? null, userSide, {
     enabled: view === "run" && puzzle != null,
     fallback: authoredPeak,
+    resetKey: puzzle?.id,
   });
 
   // At the start the bar reads the position the played move led to (the board
@@ -388,7 +387,15 @@ export function PuzzleSolver() {
   const barEval = useEngineEval(barFen, userSide, {
     enabled: view === "run" && puzzle != null,
     fallback: authoredCurrent,
+    resetKey: puzzle?.id,
   });
+
+  // The opening drop only plays once both numbers are real. Past the first move
+  // the bar just tracks the line, so it never holds again mid-puzzle.
+  const barReady =
+    vp > 0 ||
+    ((peakEval.settled || peakEval.failed) &&
+      (barEval.settled || barEval.failed));
 
   const solvedTotal = Object.values(outcomes).filter((o) =>
     o.startsWith("solved"),
@@ -399,13 +406,6 @@ export function PuzzleSolver() {
   const failedCount = Object.values(outcomes).filter(
     (o) => o === "failed",
   ).length;
-  // Clamped: the puzzles finished this session may overlap the ones already
-  // counted as done, and the meter must never read more than the queue holds.
-  const completed = Math.min(
-    puzzleProgress.total,
-    puzzleProgress.completed + Object.keys(everDone).length,
-  );
-
   React.useEffect(
     () => () => {
       if (wrongTimer.current) clearTimeout(wrongTimer.current);
@@ -442,9 +442,6 @@ export function PuzzleSolver() {
   React.useEffect(() => {
     if (!puzzle || puzzle.line.length === 0) return;
     if ((reached[puzzle.id] ?? 0) < puzzle.line.length) return;
-    setEverDone((prev) =>
-      prev[puzzle.id] ? prev : { ...prev, [puzzle.id]: true },
-    );
     setOutcomes((prev) =>
       prev[puzzle.id]
         ? prev
@@ -470,7 +467,6 @@ export function PuzzleSolver() {
     setOutcomes({});
     setReached({});
     setErred({});
-    setEverDone({});
     setViewPly(0);
     setRevealing(false);
     setHintLevel(0);
@@ -672,6 +668,7 @@ export function PuzzleSolver() {
                 loop={!solved}
                 step={`${puzzle.id}:${vp}`}
                 isUserMove={vp > 0 && line[vp - 1]?.side === userSide}
+                ready={barReady}
                 className="w-5 shrink-0 sm:w-6"
               />
               <div className="aspect-square min-h-0 flex-1">
@@ -747,7 +744,7 @@ export function PuzzleSolver() {
 
             {/* Footer — progress, action buttons, nav */}
             <div className="shrink-0 space-y-3 border-t border-line/40 bg-black/[0.14] px-5 pb-4 pt-4">
-              <ProgressRow completed={completed} total={puzzleProgress.total} />
+              <ProgressRow completed={index + 1} total={session.length} />
 
               {/* Move stepper — review the line's moves any time (← / →) */}
               {reachedPly >= 1 && (

@@ -36,30 +36,29 @@ export const CATEGORY_MOVE_ICON: Record<PuzzleCategory, MoveClassification> = {
  * replies are the engine's best, and the evals are the engine's real scores
  * from the solver's perspective (positive = the user is winning).
  *
- * The solver always plays **white**. A position that arose with the user on the
- * black side is mirrored (flip the board vertically, swap piece colours, and
- * mirror every square a1<->a8) — the tactic is identical by symmetry, and the
- * board never flips between puzzles.
+ * The solver plays whichever colour they had in the real game, so the set mixes
+ * both — the board is always oriented to their side, and `orientation` must
+ * therefore match `sideToMove`.
  */
 export const solvePuzzles: SolvePuzzle[] = [
   {
     id: "gbp-1",
     category: "missed-opportunity",
     title: "Missed the Knight-In",
-    fen: "r1b2rk1/p6p/1q1p2p1/3P1p2/Qbp1N3/4P2P/1B1P1PP1/1R3RK1 w - - 0 19",
-    orientation: "white",
-    sideToMove: "white",
-    played: { from: "e4", to: "g5", san: "Ng5" },
-    start: { cp: 146, mate: null },
+    fen: "1r3rk1/1b1p1pp1/4p2p/qBP1n3/3p1P2/1Q1P2P1/P6P/R1B2RK1 b - - 0 19",
+    orientation: "black",
+    sideToMove: "black",
+    played: { from: "e5", to: "g4", san: "Ng4" },
+    start: { cp: 149, mate: null },
     line: [
-      { from: "e4", to: "f6", san: "Nf6+", side: "white", cp: 542, mate: null, isMate: false, fen: "r1b2rk1/p6p/1q1p1Np1/3P1p2/Qbp5/4P2P/1B1P1PP1/1R3RK1 b - - 1 19" },
-      { from: "g8", to: "f7", san: "Kf7", side: "black", cp: 544, mate: null, isMate: false, fen: "r1b2r2/p4k1p/1q1p1Np1/3P1p2/Qbp5/4P2P/1B1P1PP1/1R3RK1 w - - 2 20" },
-      { from: "b2", to: "d4", san: "Bd4", side: "white", cp: 551, mate: null, isMate: false, fen: "r1b2r2/p4k1p/1q1p1Np1/3P1p2/QbpB4/4P2P/3P1PP1/1R3RK1 b - - 3 20" },
-      { from: "b6", to: "d8", san: "Qd8", side: "black", cp: 564, mate: null, isMate: false, fen: "r1bq1r2/p4k1p/3p1Np1/3P1p2/QbpB4/4P2P/3P1PP1/1R3RK1 w - - 4 21" },
-      { from: "b1", to: "b4", san: "Rxb4", side: "white", cp: 568, mate: null, isMate: false, fen: "r1bq1r2/p4k1p/3p1Np1/3P1p2/QRpB4/4P2P/3P1PP1/5RK1 b - - 0 21" },
+      { from: "e5", to: "f3", san: "Nf3+", side: "black", cp: 532, mate: null, isMate: false, fen: "1r3rk1/1b1p1pp1/4p2p/qBP5/3p1P2/1Q1P1nP1/P6P/R1B2RK1 w - - 1 20" },
+      { from: "g1", to: "f2", san: "Kf2", side: "white", cp: 558, mate: null, isMate: false, fen: "1r3rk1/1b1p1pp1/4p2p/qBP5/3p1P2/1Q1P1nP1/P4K1P/R1B2R2 b - - 2 20" },
+      { from: "b7", to: "d5", san: "Bd5", side: "black", cp: 547, mate: null, isMate: false, fen: "1r3rk1/3p1pp1/4p2p/qBPb4/3p1P2/1Q1P1nP1/P4K1P/R1B2R2 w - - 3 21" },
+      { from: "b3", to: "d1", san: "Qd1", side: "white", cp: 575, mate: null, isMate: false, fen: "1r3rk1/3p1pp1/4p2p/qBPb4/3p1P2/3P1nP1/P4K1P/R1BQ1R2 b - - 4 21" },
+      { from: "b8", to: "b5", san: "Rxb5", side: "black", cp: 558, mate: null, isMate: false, fen: "5rk1/3p1pp1/4p2p/qrPb4/3p1P2/3P1nP1/P4K1P/R1BQ1R2 w - - 0 22" },
     ],
-    prompt: "You had a crushing shot here but played Ng5. A knight jumps in with check and, in the forcing line that follows, wins a piece. Find the first move.",
-    solvedLine: "Nf6+! After Kf7 Bd4 the queen is driven off, and Rxb4 collects the loose bishop — a decisive extra piece.",
+    prompt: "You had a crushing shot here but played Ng4. A knight jumps in with check and, in the forcing line that follows, wins a piece. Find the first move.",
+    solvedLine: "Nf3+! After Kf2 Bd5, the threats against b3 and b5 overload White — …Rxb5 nets a decisive extra piece.",
     opponent: "jazzzzzzzyyyy",
     opponentRating: 511,
     gameId: "g-01",
@@ -127,21 +126,25 @@ export const solvePuzzles: SolvePuzzle[] = [
   {
     id: "gbp-5",
     category: "lost-advantage",
-    title: "Pin & Win",
-    fen: "1k6/8/8/8/8/8/1q3PPP/1R4K1 w - - 0 1",
-    orientation: "white",
-    sideToMove: "white",
-    played: { from: "g1", to: "f1", san: "Kf1" },
-    start: { cp: -567, mate: null },
+    title: "Grabbed the Wrong Pawn",
+    fen: "8/6pk/4p2p/3P1p2/5P1P/2B5/4K3/5r2 b - - 0 42",
+    orientation: "black",
+    sideToMove: "black",
+    played: { from: "f1", to: "f4", san: "Rxf4" },
+    start: { cp: 56, mate: null },
     line: [
-      { from: "b1", to: "b2", san: "Rxb2+", side: "white", cp: 3000, mate: 12, isMate: false, fen: "1k6/8/8/8/8/8/1R3PPP/6K1 b - - 0 1" },
+      { from: "f1", to: "b1", san: "Rb1", side: "black", cp: 536, mate: null, isMate: false, fen: "8/6pk/4p2p/3P1p2/5P1P/2B5/4K3/1r6 w - - 1 43" },
+      { from: "d5", to: "e6", san: "dxe6", side: "white", cp: 646, mate: null, isMate: false, fen: "8/6pk/4P2p/5p2/5P1P/2B5/4K3/1r6 b - - 0 43" },
+      { from: "b1", to: "b6", san: "Rb6", side: "black", cp: 675, mate: null, isMate: false, fen: "8/6pk/1r2P2p/5p2/5P1P/2B5/4K3/8 w - - 1 44" },
+      { from: "e6", to: "e7", san: "e7", side: "white", cp: 678, mate: null, isMate: false, fen: "8/4P1pk/1r5p/5p2/5P1P/2B5/4K3/8 b - - 0 44" },
+      { from: "b6", to: "e6", san: "Re6+", side: "black", cp: 693, mate: null, isMate: false, fen: "8/4P1pk/4r2p/5p2/5P1P/2B5/4K3/8 w - - 1 45" },
     ],
-    prompt: "You let a winning game slip with the passive Kf1. The enemy queen is pinned against its king — win it at once.",
-    solvedLine: "Rxb2+! The pinned queen falls and the rook ending is a trivial, forced win.",
-    opponent: "Tengelic",
-    opponentRating: 1141,
-    gameId: "g-05",
-    reviewPly: 41,
+    prompt: "You were winning this endgame, then grabbed a pawn with Rxf4 and it evaporated. The rook has a far better job to do — where does it belong?",
+    solvedLine: "Rb1! The rook swings behind the passed pawn instead of snacking on f4. After dxe6 Rb6 the pawn is rounded up and the extra material decides.",
+    opponent: "jazzzzzzzyyyyy",
+    opponentRating: 511,
+    gameId: "g-01",
+    reviewPly: 84,
   },
   {
     id: "gbp-6",
@@ -241,9 +244,12 @@ export const puzzleCategoryStats: PuzzleCategoryStat[] = (
  * Progress through the queue. `total` is the size of the queue itself — the one
  * number every counter in the app is measured against (the theme badges, the
  * "x/y completed" meters, the session counter, the home card), so they all agree.
+ *
+ * Nothing is completed before the user starts: a non-zero baseline would put the
+ * meter ("3/8") out of step with the puzzle they are actually on ("Puzzle 1 / 8").
  */
 export const puzzleProgress = {
-  completed: 3,
+  completed: 0,
   total: solvePuzzles.length,
 };
 
