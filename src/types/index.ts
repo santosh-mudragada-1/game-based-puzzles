@@ -186,3 +186,144 @@ export interface LeagueInfo {
   name: string;
   place: number;
 }
+
+/* ------------------------------------------------------------------ *
+ * Screen 2 — Game Review Integration
+ * ------------------------------------------------------------------ */
+
+/** One move in the review move-list. */
+export interface ReviewMove {
+  moveNo: number;
+  side: PieceColor;
+  san: string;
+  classification?: MoveClassification;
+}
+
+/** Per-classification tally for both players (Chess.com's review summary). */
+export interface ClassificationRow {
+  classification: MoveClassification;
+  white: number;
+  black: number;
+}
+
+export interface GameReview {
+  white: PlayerRef;
+  black: PlayerRef;
+  accuracy: { white: number; black: number };
+  /** Result from the trainee's perspective. */
+  result: GameResult;
+  userSide: PieceColor;
+  opening: string;
+  /** Key/critical position shown on the board. */
+  fen: string;
+  orientation: PieceColor;
+  /** White-advantage eval for the bar, in pawns (positive = White better). */
+  evalPawns: number;
+  counts: ClassificationRow[];
+  moves: ReviewMove[];
+}
+
+/** A puzzle mined from a reviewed game. */
+export interface GeneratedPuzzle {
+  id: string;
+  title: string;
+  classification: MoveClassification;
+  fen: string;
+  orientation: PieceColor;
+  sideToMove: PieceColor;
+  moveNo: number;
+  blurb: string;
+}
+
+/** Which experience to render on the review page. */
+export type ReviewState = "reviewed-free" | "reviewed-platinum" | "empty";
+
+/* ------------------------------------------------------------------ *
+ * Game Based Puzzles — the solve flow (Figma "Basic Game Based
+ * Puzzles Flow"). A puzzle is a moment from the user's own game where
+ * a stronger move was available; the trainee replays it correctly.
+ * ------------------------------------------------------------------ */
+
+/** The six mistake themes shown on the Game Based Puzzles start screen. */
+export type PuzzleCategory =
+  | "blunder"
+  | "mistake"
+  | "missed-opportunity"
+  | "lost-advantage"
+  | "critical-moment"
+  | "opening-mistake";
+
+/** A concrete move on the board. */
+export interface PuzzleMove {
+  from: string; // "e1"
+  to: string; // "e8"
+  san: string; // "Re8#"
+}
+
+/** A Stockfish evaluation from the SOLVER's perspective (positive = user better). */
+export interface PuzzleEval {
+  /** Centipawns, clamped to ±3000 for mate scores. */
+  cp: number;
+  /** Signed forced-mate distance (user-positive), or null when it's a cp eval. */
+  mate: number | null;
+}
+
+/** One half-move of a puzzle's solution line, with the resulting position + eval. */
+export interface PuzzleLinePly {
+  from: string;
+  to: string;
+  san: string;
+  /** Who made this move. */
+  side: PieceColor;
+  /** Position AFTER this move. */
+  fen: string;
+  /** User-positive centipawns of the resulting position (±3000 for mate). */
+  cp: number;
+  /** Signed forced-mate distance (user-positive), or null. */
+  mate: number | null;
+  /** True when this move is checkmate. */
+  isMate: boolean;
+}
+
+/**
+ * The atomic solving unit. The `line` is a Stockfish-computed forcing sequence
+ * the user plays through: they make each of their moves (the opponent's replies
+ * auto-play as the engine's best), until the line ends in mate or a decisive
+ * material win. Every position, move and eval here is engine-verified.
+ */
+export interface SolvePuzzle {
+  id: string;
+  category: PuzzleCategory;
+  /** Position BEFORE the first user move. */
+  fen: string;
+  orientation: PieceColor;
+  sideToMove: PieceColor;
+  /** The (weaker) move the user actually played in the game. */
+  played: PuzzleMove;
+  /**
+   * The forcing solution line, alternating the user and the opponent, starting
+   * with the user's move. Solved once the whole line has been played.
+   */
+  line: PuzzleLinePly[];
+  /** Eval of the position after the move actually played (the "unsolved" bar). */
+  start: PuzzleEval;
+  /** Coach copy while solving (the mistake + the ask). */
+  prompt: string;
+  /** Coach copy once solved (confirmation of the idea). */
+  solvedLine: string;
+  /** Short human theme, e.g. "Missed Checkmate". */
+  title: string;
+  /** Source-game context. */
+  opponent: string;
+  opponentRating: number;
+  gameId: string;
+  /** Ply to deep-link into the full game review (/review?ply=). */
+  reviewPly: number;
+}
+
+/** A theme row on the start screen (label + how many puzzles it holds). */
+export interface PuzzleCategoryStat {
+  category: PuzzleCategory;
+  label: string;
+  count: number;
+}

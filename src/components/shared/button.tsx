@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * that compresses on press. Variants mirror the real product's button system.
  */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control font-semibold select-none " +
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[10px] font-semibold select-none " +
     "transition-[transform,background-color,box-shadow,opacity] duration-100 ease-out-quint " +
     "disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none " +
     "focus-visible:ring-2 focus-visible:ring-brand/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg " +
@@ -17,14 +17,14 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          "bg-brand text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_2px_4px_rgba(0,0,0,0.30)] " +
-          "hover:bg-brand-hover active:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(0,0,0,0.30)]",
+          "bg-brand text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.14),0_2px_4px_rgba(0,0,0,0.10)] " +
+          "hover:bg-brand-hover active:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(0,0,0,0.14)]",
         secondary:
-          "bg-[#3d3a37] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_2px_4px_rgba(0,0,0,0.35)] " +
-          "hover:bg-[#454340] active:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_1px_2px_rgba(0,0,0,0.30)]",
+          "bg-gradient-to-b from-white/[0.1] to-white/[0.05] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_1px_2px_rgba(0,0,0,0.14),0_2px_4px_rgba(0,0,0,0.10)] " +
+          "hover:from-white/[0.14] hover:to-white/[0.08] active:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_1px_2px_rgba(0,0,0,0.14)]",
         gold:
-          "bg-gold text-[#2a1c07] shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_2px_4px_rgba(0,0,0,0.30)] " +
-          "hover:brightness-105 active:shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_1px_2px_rgba(0,0,0,0.30)]",
+          "bg-gold text-[#2a1c07] shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_2px_rgba(0,0,0,0.14),0_2px_4px_rgba(0,0,0,0.10)] " +
+          "hover:brightness-105 active:shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_1px_2px_rgba(0,0,0,0.14)]",
         ghost:
           "bg-transparent text-ink-muted hover:bg-white/[0.06] hover:text-ink active:translate-y-0",
         outline:

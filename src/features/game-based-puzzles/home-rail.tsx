@@ -1,12 +1,11 @@
 import { Reveal } from "@/components/shared/reveal";
 import { DailyPuzzleCard } from "@/components/home/daily-puzzle-card";
-import { HomeStreakCard } from "@/components/home/home-streak-card";
-import { CrystalLeagueCard } from "@/components/home/crystal-league-card";
-import { YourThemeCard } from "@/components/home/your-theme-card";
+import { StreakLeagueCard } from "@/components/home/streak-league-card";
 import { FriendsCard } from "@/components/home/friends-card";
+import { YourThemeCard } from "@/components/home/your-theme-card";
 import { StatsCard } from "@/components/home/stats-card";
 
-/** Chess.com home right rail — same widgets and order as the reference. */
+/** Chess.com home right rail — same widgets and order as the reference design. */
 export function HomeRail() {
   return (
     <div className="flex flex-col gap-4">
@@ -14,18 +13,15 @@ export function HomeRail() {
         <DailyPuzzleCard />
       </Reveal>
       <Reveal delay={0.08}>
-        <HomeStreakCard />
+        <StreakLeagueCard />
       </Reveal>
       <Reveal delay={0.11}>
-        <CrystalLeagueCard />
+        <FriendsCard />
       </Reveal>
       <Reveal delay={0.14}>
         <YourThemeCard />
       </Reveal>
       <Reveal delay={0.17}>
-        <FriendsCard />
-      </Reveal>
-      <Reveal delay={0.2}>
         <StatsCard />
       </Reveal>
     </div>

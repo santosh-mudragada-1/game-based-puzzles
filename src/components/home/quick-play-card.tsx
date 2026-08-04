@@ -3,6 +3,7 @@ import { Button } from "@/components/shared/button";
 import { homeStreakDays, quickPlayActions } from "@/data/home";
 import type { QuickPlayKind } from "@/types";
 import { ICON } from "@/lib/assets";
+import { cn } from "@/lib/utils";
 
 /** Official Chess.com glyph per quick-play action. */
 const KIND_ICON: Record<QuickPlayKind, string> = {
@@ -28,7 +29,7 @@ export function QuickPlayCard() {
       </div>
 
       <div className="mt-3 flex flex-1 flex-col gap-2">
-        {quickPlayActions.map((action) => (
+        {quickPlayActions.map((action, i) => (
           <Button
             key={action.label}
             type="button"

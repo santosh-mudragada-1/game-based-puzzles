@@ -19,7 +19,7 @@ export function Home() {
           <HeroRow />
         </Reveal>
 
-        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_336px]">
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
           {/* Game History sticks to the top; the rail scrolls past it. */}
           <div className="min-w-0 xl:sticky xl:top-6 xl:self-start">
             <Reveal>

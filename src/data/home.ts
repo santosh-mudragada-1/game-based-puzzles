@@ -43,6 +43,9 @@ export const gamePreview: HomePreview & { opponent: string } = {
   opponent: "jazzzzzzzyyyy",
 };
 
+/** Game-based-puzzles progress for the hero "Game Puzzles" card. */
+export const gamePuzzlesProgress = { solved: 8, total: 10 };
+
 /** Daily Puzzle (right rail). */
 export const dailyPuzzle: DailyPuzzleInfo = {
   fen: "3q1rk1/1b3ppp/p2p4/1p1Pp3/1P2P3/P1N2Q2/5PPP/2R3K1 w - - 0 1",

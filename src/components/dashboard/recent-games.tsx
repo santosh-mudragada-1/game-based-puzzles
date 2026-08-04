@@ -1,20 +1,16 @@
 import Image from "next/image";
-import type { Game, PlayerRef } from "@/types";
+import Link from "next/link";
+import type { Game, GameResult, PlayerRef } from "@/types";
 import { Card, CardHeader, CardTitle } from "@/components/shared/card";
 import { Avatar } from "@/components/shared/avatar";
 import { Badge } from "@/components/shared/badge";
 import { Button } from "@/components/shared/button";
+import { FavoriteHeart } from "./favorite-heart";
 import { recentGames, meUsername } from "@/data/games";
 import { GAME_ICON } from "@/lib/assets";
 import { cn } from "@/lib/utils";
 
-function PlayerLine({
-  p,
-  isWinner,
-}: {
-  p: PlayerRef;
-  isWinner: boolean;
-}) {
+function PlayerLine({ p, isWinner }: { p: PlayerRef; isWinner: boolean }) {
   const isMe = p.username === meUsername;
   return (
     <div className="flex items-center gap-2">
@@ -52,19 +48,26 @@ function PlayerLine({
   );
 }
 
-function ScoreBox({ score, win }: { score: number; win: boolean }) {
+const fmtScore = (s: number) => (s === 0.5 ? "½" : String(s));
+
+/** Win/loss/draw glyph from the trainee's perspective (green +, red −, grey =). */
+function ResultIcon({ result }: { result: GameResult }) {
+  const map = {
+    win: { cls: "bg-win", sym: "+", label: "Win" },
+    loss: { cls: "bg-loss", sym: "−", label: "Loss" },
+    draw: { cls: "bg-draw", sym: "=", label: "Draw" },
+  } as const;
+  const r = map[result];
   return (
     <span
+      role="img"
+      aria-label={r.label}
       className={cn(
-        "grid h-5 w-5 place-items-center rounded-[3px] text-2xs font-bold tabular-nums",
-        win
-          ? "bg-win/25 text-win"
-          : score === 0.5
-            ? "bg-gold/20 text-gold"
-            : "bg-white/[0.05] text-ink-soft",
+        "grid size-4 shrink-0 place-items-center rounded-[3px] text-[11px] font-bold leading-none text-white",
+        r.cls,
       )}
     >
-      {score === 0.5 ? "½" : score}
+      {r.sym}
     </span>
   );
 }
@@ -72,72 +75,76 @@ function ScoreBox({ score, win }: { score: number; win: boolean }) {
 function GameRow({ g }: { g: Game }) {
   const whiteWon = g.whiteScore === 1;
   const blackWon = g.blackScore === 1;
+  const hasPuzzles = g.reviewed && g.blindSpots > 0;
   return (
     <tr className="group border-t border-line/30 transition-colors odd:bg-white/[0.022] hover:bg-white/[0.05]">
+      {/* Time / type */}
+      <td className="py-2.5 pl-4 pr-1">
+        <div className="flex w-12 flex-col items-center gap-0.5 text-ink-soft">
+          <Image src={GAME_ICON[g.timeClass]} width={18} height={18} alt="" />
+          <span className="whitespace-nowrap text-2xs font-semibold">
+            {g.timeControl}
+          </span>
+        </div>
+      </td>
+
       {/* Players */}
-      <td className="py-2.5 pl-4 pr-2">
-        <div className="flex items-center gap-3">
-          <div className="hidden w-12 shrink-0 flex-col items-center gap-0.5 text-ink-soft sm:flex">
-            <Image src={GAME_ICON[g.timeClass]} width={18} height={18} alt="" />
-            <span className="text-2xs font-semibold">{g.timeControl}</span>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <PlayerLine p={g.white} isWinner={whiteWon} />
-            <PlayerLine p={g.black} isWinner={blackWon} />
-          </div>
+      <td className="py-2.5 pl-1 pr-2">
+        <div className="flex flex-col gap-1.5">
+          <PlayerLine p={g.white} isWinner={whiteWon} />
+          <PlayerLine p={g.black} isWinner={blackWon} />
         </div>
       </td>
 
-      {/* Result */}
+      {/* Result — stacked scores + a win/loss/draw glyph */}
       <td className="px-2 py-2.5">
-        <div className="flex flex-col items-center gap-1">
-          <ScoreBox score={g.whiteScore} win={whiteWon} />
-          <ScoreBox score={g.blackScore} win={blackWon} />
+        <div className="flex items-center justify-center gap-2">
+          <div className="flex flex-col items-center gap-0.5 text-[13px] font-semibold leading-none tabular-nums text-ink/85">
+            <span>{fmtScore(g.whiteScore)}</span>
+            <span>{fmtScore(g.blackScore)}</span>
+          </div>
+          <ResultIcon result={g.result} />
         </div>
       </td>
 
-      {/* Accuracy */}
-      <td className="hidden px-2 py-2.5 text-center md:table-cell">
+      {/* Accuracy — numbers once reviewed, otherwise a Review button */}
+      <td className="px-2 py-2.5 text-center">
         {g.reviewed && g.accuracy ? (
           <div className="flex flex-col gap-1 text-xs font-semibold tabular-nums text-ink-muted">
             <span>{g.accuracy.white.toFixed(1)}</span>
             <span>{g.accuracy.black.toFixed(1)}</span>
           </div>
         ) : (
-          <span className="text-xs text-ink-faint">—</span>
+          <Button size="sm" variant="secondary" asChild>
+            <Link href="/review">Review</Link>
+          </Button>
         )}
       </td>
 
-      {/* Puzzles — only reviewed games can have them */}
+      {/* Moves */}
+      <td className="px-2 py-2.5 text-center text-[13px] font-semibold tabular-nums text-ink-muted">
+        {g.moves}
+      </td>
+
+      {/* Puzzles — Solve button when the game has blind spots, else a dash */}
       <td className="px-2 py-2.5 text-center">
-        {!g.reviewed ? (
-          <span className="text-2xs font-semibold text-ink-faint">—</span>
-        ) : g.blindSpots > 0 ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2 py-1 text-2xs font-bold text-ink-muted">
-            <Image src={GAME_ICON.puzzleGrey} width={14} height={14} alt="" />
-            {g.blindSpots}
-          </span>
+        {hasPuzzles ? (
+          <Button size="sm" variant="secondary" asChild>
+            <Link href="/puzzles/game-based">Solve</Link>
+          </Button>
         ) : (
-          <span className="text-2xs font-semibold text-ink-faint">Clean</span>
+          <span className="text-2xs font-semibold text-ink-faint">–</span>
         )}
       </td>
 
       {/* Date */}
-      <td className="hidden px-2 py-2.5 text-center text-xs font-medium text-ink-soft sm:table-cell">
+      <td className="whitespace-nowrap px-2 py-2.5 text-center text-xs font-medium text-ink-soft">
         {g.date}
       </td>
 
-      {/* Action — Practice needs a reviewed game; otherwise Review first */}
-      <td className="py-2.5 pl-2 pr-4 text-right">
-        {g.reviewed ? (
-          <Button size="sm" variant="primary">
-            Practice
-          </Button>
-        ) : (
-          <Button size="sm" variant="secondary">
-            Review
-          </Button>
-        )}
+      {/* Favorite */}
+      <td className="py-2.5 pl-1 pr-4 text-right">
+        <FavoriteHeart label={`${g.white.username} vs ${g.black.username}`} />
       </td>
     </tr>
   );
@@ -154,32 +161,32 @@ export function RecentGames() {
       </CardHeader>
 
       <div className="overflow-x-auto scrollbar-thin">
-        <table className="w-full border-collapse">
+        <table className="w-full min-w-[720px] border-collapse">
           <thead>
             <tr className="bg-surface-sunken text-2xs font-bold uppercase tracking-wide text-ink-faint">
-              <th scope="col" className="py-2 pl-4 pr-2 text-left font-bold">
+              <th scope="col" className="py-2 pl-4 pr-1">
+                <span className="sr-only">Time control</span>
+              </th>
+              <th scope="col" className="py-2 pl-1 pr-2 text-left font-bold">
                 Players
               </th>
               <th scope="col" className="px-2 py-2 text-center font-bold">
                 Result
               </th>
-              <th
-                scope="col"
-                className="hidden px-2 py-2 text-center font-bold md:table-cell"
-              >
+              <th scope="col" className="px-2 py-2 text-center font-bold">
                 Accuracy
+              </th>
+              <th scope="col" className="px-2 py-2 text-center font-bold">
+                Moves
               </th>
               <th scope="col" className="px-2 py-2 text-center font-bold">
                 Puzzles
               </th>
-              <th
-                scope="col"
-                className="hidden px-2 py-2 text-center font-bold sm:table-cell"
-              >
+              <th scope="col" className="px-2 py-2 text-center font-bold">
                 Date
               </th>
-              <th scope="col" className="py-2 pl-2 pr-4 text-right font-bold">
-                <span className="sr-only">Action</span>
+              <th scope="col" className="py-2 pl-1 pr-4 text-right font-bold">
+                <span className="sr-only">Favorite</span>
               </th>
             </tr>
           </thead>

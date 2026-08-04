@@ -30,3 +30,6 @@ yarn-error.log*
 # vercel
 .vercel
 .env*
+
+# stockfish wasm — generated from node_modules by scripts/copy-engine.mjs
+/public/engine

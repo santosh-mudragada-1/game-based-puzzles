@@ -13,7 +13,7 @@ export const MOVE_LABEL: Record<MoveClassification, string> = {
   book: "Book",
   inaccuracy: "Inaccuracy",
   mistake: "Mistake",
-  missed: "Missed win",
+  missed: "Miss",
   blunder: "Blunder",
 };
 
@@ -49,6 +49,11 @@ export const GAME_ICON = {
   blitz: "/game-types/blitz.svg",
   bullet: "/game-types/bullet.svg",
   daily: "/game-types/daily.svg",
+  gameBasedPuzzles: "/game-types/game-based-puzzles.svg",
+  dailyPuzzle: "/game-types/daily-puzzle.svg",
+  puzzleRush: "/game-types/puzzle-rush.svg",
+  puzzleBattle: "/game-types/puzzle-battle.svg",
+  customPuzzles: "/game-types/custom-puzzles.svg",
 };
 
 export const NAV_ICON = {
@@ -72,4 +77,5 @@ export const ICON = {
   coach: "/misc/coach-levy.png",
   noAvatar: "/misc/no-avatar.gif",
   upgrade: "/misc/upgrade.svg",
+  gameReview: "/misc/game-review.svg",
 };

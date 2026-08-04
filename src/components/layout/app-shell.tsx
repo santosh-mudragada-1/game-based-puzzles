@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { Sidebar } from "./sidebar";
@@ -15,10 +16,16 @@ import { currentUser } from "@/data";
 export function AppShell({
   children,
   activeNav,
+  fullBleed = false,
 }: {
   children: React.ReactNode;
   /** Sidebar item to highlight; omit for the home page (none highlighted). */
   activeNav?: string;
+  /**
+   * Skip the centered max-width container so the page fills the viewport
+   * (used by the Game Review, whose board fills the whole left side).
+   */
+  fullBleed?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
@@ -74,7 +81,7 @@ export function AppShell({
       {/* Desktop sidebar */}
       <Sidebar
         activeLabel={activeNav}
-        className="fixed inset-y-0 left-0 z-30 hidden w-[232px] border-r border-line/60 lg:flex"
+        className="fixed inset-y-0 left-0 z-30 hidden w-[170px] border-r border-line/60 lg:flex"
       />
 
       {/* Mobile top bar */}
@@ -89,7 +96,9 @@ export function AppShell({
         >
           <Menu className="size-6" />
         </button>
-        <Logo height={22} />
+        <Link href="/" aria-label="Chess.com home">
+          <Logo height={22} />
+        </Link>
         <div className="flex-1" />
         <Avatar size={30} alt={currentUser.displayName} />
       </header>
@@ -128,6 +137,7 @@ export function AppShell({
               <Sidebar
                 activeLabel={activeNav}
                 onNavigate={() => setOpen(false)}
+                drawer
               />
             </motion.div>
           </>
@@ -136,10 +146,17 @@ export function AppShell({
 
       {/* Content — the page composes its own columns so the hero can span
           full width (like chess.com) with Game History + rail below it. */}
-      <div className="lg:pl-[232px]">
-        <div className="mx-auto max-w-[1120px] px-3 py-5 sm:px-5 lg:px-6 lg:py-6">
-          {children}
-        </div>
+      <div className="lg:pl-[170px]">
+        {fullBleed ? (
+          <main id="main-content">{children}</main>
+        ) : (
+          <main
+            id="main-content"
+            className="mx-auto max-w-[1120px] px-3 py-5 sm:px-5 lg:px-6 lg:py-6"
+          >
+            {children}
+          </main>
+        )}
       </div>
     </div>
   );
