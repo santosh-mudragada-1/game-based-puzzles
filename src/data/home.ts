@@ -6,6 +6,7 @@ import type {
   StatRow,
   LeagueInfo,
 } from "@/types";
+import { puzzleProgress } from "./solve-puzzles";
 
 /** Quick-play card (left of the home hero). Streak matches the reference. */
 export const homeStreakDays = 133;
@@ -43,8 +44,14 @@ export const gamePreview: HomePreview & { opponent: string } = {
   opponent: "jazzzzzzzyyyy",
 };
 
-/** Game-based-puzzles progress for the hero "Game Puzzles" card. */
-export const gamePuzzlesProgress = { solved: 8, total: 10 };
+/**
+ * Game-based-puzzles progress for the hero "Game Puzzles" card — the same queue
+ * the /puzzles/game-based screen counts, so the home card and the solver agree.
+ */
+export const gamePuzzlesProgress = {
+  solved: puzzleProgress.completed,
+  total: puzzleProgress.total,
+};
 
 /** Daily Puzzle (right rail). */
 export const dailyPuzzle: DailyPuzzleInfo = {

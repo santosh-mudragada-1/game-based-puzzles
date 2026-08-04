@@ -399,7 +399,12 @@ export function PuzzleSolver() {
   const failedCount = Object.values(outcomes).filter(
     (o) => o === "failed",
   ).length;
-  const completed = puzzleProgress.completed + Object.keys(everDone).length;
+  // Clamped: the puzzles finished this session may overlap the ones already
+  // counted as done, and the meter must never read more than the queue holds.
+  const completed = Math.min(
+    puzzleProgress.total,
+    puzzleProgress.completed + Object.keys(everDone).length,
+  );
 
   React.useEffect(
     () => () => {

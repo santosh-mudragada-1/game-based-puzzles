@@ -123,6 +123,19 @@ interface PuzzleEvalBarProps {
 const GAIN_THRESHOLD = 40;
 
 /**
+ * The fill settles with the design system's out-quint curve rather than a spring.
+ * A spring overshoots, which on an evaluation bar reads as the position being
+ * briefly better than it is — and momentarily pushes the fill past the band it's
+ * animating through. Duration is shared with the label so the number tracks the
+ * boundary instead of trailing it.
+ */
+const FILL_MS = 450;
+const FILL_EASE = {
+  duration: FILL_MS / 1000,
+  ease: [0.22, 1, 0.36, 1] as const,
+};
+
+/**
  * The Game Based Puzzles evaluation bar.
  *
  * The bar reads as "what you gave up": it is anchored at the evaluation that was
@@ -186,18 +199,29 @@ export function PuzzleEvalBar({
     return () => clearTimeout(t);
   }, [gain]);
 
-  // Keep the boundary label clear of the bar's ends and of the bottom label.
-  const labelAt = Math.min(93, Math.max(11, fill));
-  // The label rides just above the fill boundary, so it lands on the red or green
-  // band whenever there is one (both light — needs dark ink) and on the bare dark
-  // background otherwise. Clamped to the top, it sits on the light fill instead.
-  const onLight = fill > 93 || peak > fill + 0.4 || gain != null;
+  /**
+   * Only worth naming what was available while it's still out of reach. Once the
+   * solver catches up there is no gap to explain, so the bar drops back to a
+   * single number at the bottom — which is where a solved puzzle shows its
+   * result ("1-0") rather than the mate that used to be on offer ("M1").
+   */
+  const gap = peak > fill + 0.4;
+  const showPeak = Boolean(peakLabel) && gap;
+
+  // With no gap the single number sits at the bottom, Chess.com style; otherwise
+  // it rides the fill boundary, clear of the bar's ends and the bottom label.
+  const labelAt = showPeak ? Math.min(93, Math.max(11, fill)) : 0;
+  // The boundary label lands on the red or green band when there is one (both
+  // light — needs dark ink) and on the bare dark background otherwise.
+  const onLight = showPeak
+    ? fill > 93 || gap || gain != null
+    : fill >= 6; // pinned at the bottom, so it's on the light fill
 
   return (
     <div
       role="img"
       aria-label={
-        peakLabel && peakLabel !== label
+        showPeak
           ? `Evaluation ${label}, ${peakLabel} was available`
           : `Evaluation ${label}`
       }
@@ -213,7 +237,7 @@ export function PuzzleEvalBar({
         style={{ backgroundColor: LIGHT }}
         initial={{ height: `${peak}%` }}
         animate={{ height: `${fill}%` }}
-        transition={{ type: "spring", stiffness: 280, damping: 26, mass: 0.7 }}
+        transition={FILL_EASE}
       />
 
       {/* What the played move gave away — sweeps down, loops while unsolved. */}
@@ -246,19 +270,21 @@ export function PuzzleEvalBar({
         className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-black/25"
       />
 
-      {/* Current evaluation, riding the fill boundary. */}
+      {/* Current evaluation — rides the fill boundary, or sits at the bottom
+          once there's no gap left to explain. */}
       <span
-        className="pointer-events-none absolute inset-x-0 text-center text-[10px] font-bold leading-none tabular-nums transition-[bottom] duration-500"
+        className="pointer-events-none absolute inset-x-0 text-center text-[10px] font-bold leading-none tabular-nums"
         style={{
-          bottom: `calc(${labelAt}% + 2px)`,
+          bottom: showPeak ? `calc(${labelAt}% + 2px)` : "3px",
           color: onLight ? INK_DARK : INK_LIGHT,
+          transition: `bottom ${FILL_MS}ms cubic-bezier(0.22,1,0.36,1)`,
         }}
       >
         {label}
       </span>
 
-      {/* What was on the table, pinned at the bottom. */}
-      {peakLabel && (
+      {/* What was on the table, pinned at the bottom while it's still out of reach. */}
+      {showPeak && (
         <span
           className="pointer-events-none absolute inset-x-0 bottom-[3px] text-center text-[10px] font-bold leading-none tabular-nums"
           style={{ color: fill >= 6 ? INK_DARK : INK_LIGHT }}

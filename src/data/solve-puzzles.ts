@@ -35,26 +35,31 @@ export const CATEGORY_MOVE_ICON: Record<PuzzleCategory, MoveClassification> = {
  * generated with **Stockfish 18** (see the scratch generator); the opponent
  * replies are the engine's best, and the evals are the engine's real scores
  * from the solver's perspective (positive = the user is winning).
+ *
+ * The solver always plays **white**. A position that arose with the user on the
+ * black side is mirrored (flip the board vertically, swap piece colours, and
+ * mirror every square a1<->a8) — the tactic is identical by symmetry, and the
+ * board never flips between puzzles.
  */
 export const solvePuzzles: SolvePuzzle[] = [
   {
     id: "gbp-1",
     category: "missed-opportunity",
     title: "Missed the Knight-In",
-    fen: "1r3rk1/1b1p1pp1/4p2p/qBP1n3/3p1P2/1Q1P2P1/P6P/R1B2RK1 b - - 0 19",
-    orientation: "black",
-    sideToMove: "black",
-    played: { from: "e5", to: "g4", san: "Ng4" },
-    start: { cp: 149, mate: null },
+    fen: "r1b2rk1/p6p/1q1p2p1/3P1p2/Qbp1N3/4P2P/1B1P1PP1/1R3RK1 w - - 0 19",
+    orientation: "white",
+    sideToMove: "white",
+    played: { from: "e4", to: "g5", san: "Ng5" },
+    start: { cp: 146, mate: null },
     line: [
-      { from: "e5", to: "f3", san: "Nf3+", side: "black", cp: 532, mate: null, isMate: false, fen: "1r3rk1/1b1p1pp1/4p2p/qBP5/3p1P2/1Q1P1nP1/P6P/R1B2RK1 w - - 1 20" },
-      { from: "g1", to: "f2", san: "Kf2", side: "white", cp: 558, mate: null, isMate: false, fen: "1r3rk1/1b1p1pp1/4p2p/qBP5/3p1P2/1Q1P1nP1/P4K1P/R1B2R2 b - - 2 20" },
-      { from: "b7", to: "d5", san: "Bd5", side: "black", cp: 547, mate: null, isMate: false, fen: "1r3rk1/3p1pp1/4p2p/qBPb4/3p1P2/1Q1P1nP1/P4K1P/R1B2R2 w - - 3 21" },
-      { from: "b3", to: "d1", san: "Qd1", side: "white", cp: 575, mate: null, isMate: false, fen: "1r3rk1/3p1pp1/4p2p/qBPb4/3p1P2/3P1nP1/P4K1P/R1BQ1R2 b - - 4 21" },
-      { from: "b8", to: "b5", san: "Rxb5", side: "black", cp: 558, mate: null, isMate: false, fen: "5rk1/3p1pp1/4p2p/qrPb4/3p1P2/3P1nP1/P4K1P/R1BQ1R2 w - - 0 22" },
+      { from: "e4", to: "f6", san: "Nf6+", side: "white", cp: 542, mate: null, isMate: false, fen: "r1b2rk1/p6p/1q1p1Np1/3P1p2/Qbp5/4P2P/1B1P1PP1/1R3RK1 b - - 1 19" },
+      { from: "g8", to: "f7", san: "Kf7", side: "black", cp: 544, mate: null, isMate: false, fen: "r1b2r2/p4k1p/1q1p1Np1/3P1p2/Qbp5/4P2P/1B1P1PP1/1R3RK1 w - - 2 20" },
+      { from: "b2", to: "d4", san: "Bd4", side: "white", cp: 551, mate: null, isMate: false, fen: "r1b2r2/p4k1p/1q1p1Np1/3P1p2/QbpB4/4P2P/3P1PP1/1R3RK1 b - - 3 20" },
+      { from: "b6", to: "d8", san: "Qd8", side: "black", cp: 564, mate: null, isMate: false, fen: "r1bq1r2/p4k1p/3p1Np1/3P1p2/QbpB4/4P2P/3P1PP1/1R3RK1 w - - 4 21" },
+      { from: "b1", to: "b4", san: "Rxb4", side: "white", cp: 568, mate: null, isMate: false, fen: "r1bq1r2/p4k1p/3p1Np1/3P1p2/QRpB4/4P2P/3P1PP1/5RK1 b - - 0 21" },
     ],
-    prompt: "You had a crushing shot here but played Ng4. A knight jumps in with check and, in the forcing line that follows, wins a piece. Find the first move.",
-    solvedLine: "Nf3+! After Kf2 Bd5, the threats against b3 and b5 overload White — …Rxb5 nets a decisive extra piece.",
+    prompt: "You had a crushing shot here but played Ng5. A knight jumps in with check and, in the forcing line that follows, wins a piece. Find the first move.",
+    solvedLine: "Nf6+! After Kf7 Bd4 the queen is driven off, and Rxb4 collects the loose bishop — a decisive extra piece.",
     opponent: "jazzzzzzzyyyy",
     opponentRating: 511,
     gameId: "g-01",
@@ -205,22 +210,42 @@ export const solvePuzzles: SolvePuzzle[] = [
   },
 ];
 
-/**
- * The theme list on the start screen. The counts are the trainee's standing
- * backlog per theme (as in the Figma); the puzzles above are the set the
- * "Solve" button plays through.
- */
-export const puzzleCategoryStats: PuzzleCategoryStat[] = [
-  { category: "blunder", label: "Blunders", count: 12 },
-  { category: "mistake", label: "Mistakes", count: 8 },
-  { category: "missed-opportunity", label: "Missed Opportunities", count: 6 },
-  { category: "lost-advantage", label: "Lost Advantages", count: 14 },
-  { category: "critical-moment", label: "Critical Moments", count: 21 },
-  { category: "opening-mistake", label: "Opening Mistakes", count: 8 },
-];
+/** Plural theme labels for the start-screen list. */
+const CATEGORY_PLURAL: Record<PuzzleCategory, string> = {
+  blunder: "Blunders",
+  mistake: "Mistakes",
+  "missed-opportunity": "Missed Opportunities",
+  "lost-advantage": "Lost Advantages",
+  "critical-moment": "Critical Moments",
+  "opening-mistake": "Opening Mistakes",
+};
 
-/** Lifetime solved / total progress shown on the start screen (Figma 18/32). */
-export const puzzleProgress = { completed: 18, total: 32 };
+/**
+ * The theme list on the start screen.
+ *
+ * Counted from `solvePuzzles` rather than authored, so a theme badge can never
+ * promise more puzzles than the "Solve" button actually plays through. Themes
+ * with nothing queued are dropped rather than shown as an empty row.
+ */
+export const puzzleCategoryStats: PuzzleCategoryStat[] = (
+  Object.keys(CATEGORY_PLURAL) as PuzzleCategory[]
+)
+  .map((category) => ({
+    category,
+    label: CATEGORY_PLURAL[category],
+    count: solvePuzzles.filter((p) => p.category === category).length,
+  }))
+  .filter((c) => c.count > 0);
+
+/**
+ * Progress through the queue. `total` is the size of the queue itself — the one
+ * number every counter in the app is measured against (the theme badges, the
+ * "x/y completed" meters, the session counter, the home card), so they all agree.
+ */
+export const puzzleProgress = {
+  completed: 3,
+  total: solvePuzzles.length,
+};
 
 /** Coach's opening line on the start screen. */
 export const coachIntro = `${solvePuzzles.length} new puzzles generated from your last 5 games.`;
