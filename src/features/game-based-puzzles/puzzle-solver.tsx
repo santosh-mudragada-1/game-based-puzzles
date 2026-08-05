@@ -1020,6 +1020,11 @@ export function PuzzleSolver() {
                   ?.label ?? CATEGORY_LABEL[nextCategory])
               : null
           }
+          nextCategoryIcon={
+            nextCategory
+              ? moveTypeIcon(CATEGORY_MOVE_ICON[nextCategory])
+              : null
+          }
           onSolveNextCategory={solveNextCategory}
           onRetryUnsolved={retryUnsolved}
           onReplay={() => beginSession(session, sessionCat)}

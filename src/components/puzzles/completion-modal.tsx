@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { ArrowRight, RotateCcw, Target, X } from "lucide-react";
+import { RotateCcw, Target, X } from "lucide-react";
 
 import { Confetti } from "@/components/shared/confetti";
 import { GAME_ICON } from "@/lib/assets";
@@ -117,6 +117,8 @@ interface CompletionModalProps {
   queueTotal: number;
   /** Label of the next theme still holding unsolved puzzles, if any. */
   nextCategoryLabel?: string | null;
+  /** That theme's badge — the same art the start-screen theme list uses. */
+  nextCategoryIcon?: string | null;
   onRetryUnsolved: () => void;
   onSolveNextCategory: () => void;
   onReplay: () => void;
@@ -140,6 +142,7 @@ export function CompletionModal({
   unsolved,
   queueTotal,
   nextCategoryLabel,
+  nextCategoryIcon,
   onRetryUnsolved,
   onSolveNextCategory,
   onReplay,
@@ -278,7 +281,15 @@ export function CompletionModal({
                   onClick={onSolveNextCategory}
                   className={unsolved > 0 ? QUIET_BTN : GREEN_BTN}
                 >
-                  <ArrowRight />
+                  {nextCategoryIcon ? (
+                    <Image
+                      src={nextCategoryIcon}
+                      width={22}
+                      height={22}
+                      alt=""
+                      className="shrink-0"
+                    />
+                  ) : null}
                   Solve {nextCategoryLabel}
                 </button>
               )}
