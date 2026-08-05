@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { PlanProvider } from "@/hooks/use-plan";
 import { PuzzleProgressProvider } from "@/hooks/use-puzzle-progress";
-import { PlanSwitcher } from "@/components/shared/plan-switcher";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -35,10 +34,7 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} dark`}>
       <body className="min-h-screen bg-bg">
         <PlanProvider>
-          <PuzzleProgressProvider>
-            {children}
-            <PlanSwitcher />
-          </PuzzleProgressProvider>
+          <PuzzleProgressProvider>{children}</PuzzleProgressProvider>
         </PlanProvider>
       </body>
     </html>

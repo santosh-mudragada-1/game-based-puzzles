@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/shared/logo";
 import { Avatar } from "@/components/shared/avatar";
+import { PlanSwitcher } from "@/components/shared/plan-switcher";
 import { NAV_ICON, GAME_ICON, ICON } from "@/lib/assets";
 import { currentUser } from "@/data";
 import { usePlan } from "@/hooks/use-plan";
@@ -301,6 +302,11 @@ export function Sidebar({
 
       {/* Bottom cluster */}
       <div className="px-2 pb-3">
+        {/* Prototype-only: preview the Free or Premium experience. */}
+        <div className="mb-1">
+          <PlanSwitcher onNavigate={onNavigate} />
+        </div>
+
         <button
           type="button"
           className="mb-2 flex w-full items-center gap-2.5 rounded-[6px] px-2.5 py-2 text-ink-soft transition-colors hover:bg-white/[0.04] hover:text-ink"

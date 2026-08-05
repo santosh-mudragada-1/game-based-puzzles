@@ -19,12 +19,11 @@ const OPTIONS: { plan: PlanTier; label: string; blurb: string }[] = [
  * A prototype-only switch between the Free and Premium experiences, so a
  * reviewer can see both without clearing storage or editing a URL.
  *
- * Deliberately a small floating control rather than anything in the product
- * chrome — it isn't part of the design, and every gate it flips (the daily
- * limit, the paywall card, the sidebar Upgrade CTA) reads from the same plan
- * context the real UI does.
+ * Sits in the sidebar's bottom cluster above Search, styled as one of its rows.
+ * Every gate it flips — the daily limit, the paywall card, the Upgrade CTA —
+ * reads from the same plan context the real UI does.
  */
-export function PlanSwitcher() {
+export function PlanSwitcher({ onNavigate }: { onNavigate?: () => void }) {
   const { plan, setPlan } = usePlan();
   const [open, setOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement>(null);
@@ -46,61 +45,66 @@ export function PlanSwitcher() {
     };
   }, [open]);
 
+  const premium = plan === "premium";
+
   return (
-    // Raised clear of the bottom bar: every screen puts its primary CTA in the
-    // bottom-right (Solve / Start Review / the puzzle-nav arrows), and measuring
-    // each route showed 100px is the first offset that lands on nothing clickable.
-    <div ref={rootRef} className="fixed bottom-[100px] right-3 z-[100] print:hidden">
+    <div ref={rootRef} className="relative">
+      {/* Opens to the side, like the nav flyouts, so it never covers the rail. */}
       <AnimatePresence>
         {open && (
           <motion.div
-            role="menu"
-            aria-label="Switch plan"
-            className="absolute bottom-11 right-0 w-[212px] overflow-hidden rounded-[10px] border border-line/70 bg-surface-sunken p-1.5 shadow-pop"
-            initial={{ opacity: 0, y: 6, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 6, scale: 0.97 }}
+            className="absolute bottom-0 left-full z-50 pl-2"
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -6 }}
             transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
           >
-            <p className="px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wide text-ink-faint">
-              Preview as
-            </p>
-            {OPTIONS.map((o) => {
-              const active = plan === o.plan;
-              return (
-                <button
-                  key={o.plan}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={active}
-                  onClick={() => {
-                    setPlan(o.plan);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-[7px] px-2 py-2 text-left transition-colors",
-                    active ? "bg-white/[0.07]" : "hover:bg-white/[0.05]",
-                  )}
-                >
-                  {o.plan === "premium" ? (
-                    <Image src={ICON.upgrade} width={18} height={18} alt="" />
-                  ) : (
-                    <span className="grid size-[18px] place-items-center">
-                      <span className="size-2.5 rounded-full border-2 border-ink-faint" />
+            <div
+              role="menu"
+              aria-label="Switch plan"
+              className="w-[212px] rounded-[8px] border border-line/60 bg-surface-sunken p-1.5 shadow-pop"
+            >
+              <p className="px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+                Preview as
+              </p>
+              {OPTIONS.map((o) => {
+                const active = plan === o.plan;
+                return (
+                  <button
+                    key={o.plan}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={active}
+                    onClick={() => {
+                      setPlan(o.plan);
+                      setOpen(false);
+                      onNavigate?.();
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-[7px] px-2 py-2 text-left transition-colors",
+                      active ? "bg-white/[0.07]" : "hover:bg-white/[0.05]",
+                    )}
+                  >
+                    {o.plan === "premium" ? (
+                      <Image src={ICON.upgrade} width={18} height={18} alt="" />
+                    ) : (
+                      <span className="grid size-[18px] place-items-center">
+                        <span className="size-2.5 rounded-full border-2 border-ink-faint" />
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-bold text-ink">
+                        {o.label}
+                      </span>
+                      <span className="block text-[11px] text-ink-soft">
+                        {o.blurb}
+                      </span>
                     </span>
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-bold text-ink">
-                      {o.label}
-                    </span>
-                    <span className="block text-[11px] text-ink-soft">
-                      {o.blurb}
-                    </span>
-                  </span>
-                  {active && <Check className="size-4 shrink-0 text-brand" />}
-                </button>
-              );
-            })}
+                    {active && <Check className="size-4 shrink-0 text-brand" />}
+                  </button>
+                );
+              })}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -110,19 +114,25 @@ export function PlanSwitcher() {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Preview as ${plan === "premium" ? "Premium" : "Free"} — switch plan`}
+        aria-label={`Preview as ${premium ? "Premium" : "Free"} — switch plan`}
         title="Prototype: switch plan"
         className={cn(
-          "grid size-9 place-items-center rounded-full border border-line/70 bg-surface-sunken/90 text-ink-soft shadow-pop backdrop-blur transition",
-          "hover:text-ink hover:brightness-125 active:translate-y-px",
-          open ? "opacity-100" : "opacity-45 hover:opacity-100",
+          "flex w-full items-center gap-2.5 rounded-[6px] px-2.5 py-2 text-left transition-colors",
+          open
+            ? "bg-white/[0.06] text-ink"
+            : "text-ink-soft hover:bg-white/[0.04] hover:text-ink",
         )}
       >
-        {plan === "premium" ? (
-          <Image src={ICON.upgrade} width={16} height={16} alt="" />
-        ) : (
-          <FlaskConical className="size-[15px]" strokeWidth={2.25} />
-        )}
+        <span className="grid size-[18px] shrink-0 place-items-center">
+          {premium ? (
+            <Image src={ICON.upgrade} width={18} height={18} alt="" />
+          ) : (
+            <FlaskConical className="size-[17px]" strokeWidth={2.25} />
+          )}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+          {premium ? "Premium Plan" : "Free Plan"}
+        </span>
       </button>
     </div>
   );
