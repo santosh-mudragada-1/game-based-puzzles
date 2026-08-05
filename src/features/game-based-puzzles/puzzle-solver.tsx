@@ -625,6 +625,8 @@ export function PuzzleSolver() {
     setHintLevel(0);
     setAssisted(false);
     setWrong(false);
+    // A fresh puzzle starts with a clean slate — no carried-over shake.
+    setShakeSignal(0);
     if (wrongTimer.current) clearTimeout(wrongTimer.current);
   };
   const next = () => {

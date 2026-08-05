@@ -105,8 +105,15 @@ export function PuzzleBoard({
   React.useEffect(() => setSelected(null), [fen]);
 
   // Shake the board on each wrong attempt.
+  //
+  // Only an *increase* counts. The board is remounted per puzzle, so testing
+  // `shakeSignal > 0` would replay the previous puzzle's shake the moment the
+  // next one appears — before the solver has put a foot wrong.
+  const prevShake = React.useRef(shakeSignal);
   React.useEffect(() => {
-    if (shakeSignal <= 0) return;
+    const rose = shakeSignal > prevShake.current;
+    prevShake.current = shakeSignal;
+    if (!rose) return;
     controls.start({
       x: [0, -9, 9, -7, 7, -3, 0],
       transition: { duration: 0.42, ease: "easeInOut" },
