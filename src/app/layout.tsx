@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { PlanProvider } from "@/hooks/use-plan";
+import { PuzzleProgressProvider } from "@/hooks/use-puzzle-progress";
+import { PlanSwitcher } from "@/components/shared/plan-switcher";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -32,7 +34,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} dark`}>
       <body className="min-h-screen bg-bg">
-        <PlanProvider>{children}</PlanProvider>
+        <PlanProvider>
+          <PuzzleProgressProvider>
+            {children}
+            <PlanSwitcher />
+          </PuzzleProgressProvider>
+        </PlanProvider>
       </body>
     </html>
   );

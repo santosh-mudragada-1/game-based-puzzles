@@ -39,6 +39,7 @@ import {
   FREE_DAILY_LIMIT,
 } from "@/data/solve-puzzles";
 import { usePlan } from "@/hooks/use-plan";
+import { usePuzzleProgress } from "@/hooks/use-puzzle-progress";
 import {
   CompletionModal,
   type CompletionKind,
@@ -54,7 +55,13 @@ const UpgradeTransition = dynamic(
 );
 import { checkedKingSquare, evalLabel, fenAfterMove } from "@/lib/puzzle";
 import { useEngineEval } from "@/hooks/use-engine-eval";
-import type { PieceColor, PlayerRef, PuzzleCategory, SolvePuzzle } from "@/types";
+import type {
+  PieceColor,
+  PlayerRef,
+  PuzzleCategory,
+  PuzzleOutcome,
+  SolvePuzzle,
+} from "@/types";
 import { cn } from "@/lib/utils";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -66,14 +73,7 @@ const GREEN_BTN =
 const ICON_BTN =
   "grid size-9 place-items-center rounded-[6px] text-ink-soft transition-colors hover:bg-white/[0.06] hover:text-ink";
 
-type Outcome = "solved-clean" | "solved-hint" | "failed";
-
-/** Ordering for "keep the best attempt" when a puzzle is replayed. */
-const RANK: Record<Outcome, number> = {
-  failed: 0,
-  "solved-hint": 1,
-  "solved-clean": 2,
-};
+type Outcome = PuzzleOutcome;
 
 /** The trainee, playing whichever side the puzzle is to move. */
 function mePlayer(side: PieceColor): PlayerRef {
@@ -326,14 +326,21 @@ export function PuzzleSolver() {
   const [index, setIndex] = React.useState(0);
   const [outcomes, setOutcomes] = React.useState<Record<string, Outcome>>({});
   /**
-   * Every puzzle ever finished, best result kept, across all sessions.
+   * Lifetime standing, shared with the rest of the app.
    *
    * `outcomes` is deliberately wiped whenever a session starts, so on its own it
    * would report "3/8" after retrying three puzzles even though all eight had
-   * been solved. This is the record the progress meters and the end card read,
-   * so drilling one theme and then another adds up instead of starting over.
+   * been solved. The meters, the end card and the home page all read this
+   * instead, so drilling one theme then another adds up.
    */
-  const [record, setRecord] = React.useState<Record<string, Outcome>>({});
+  const {
+    record,
+    recordOutcome,
+    solved: solvedTotal,
+    clean: solvedClean,
+    attempted: attemptedTotal,
+    unsolved: unsolvedCount,
+  } = usePuzzleProgress();
   /** Furthest ply reached per puzzle (progress) — advances on each played move. */
   const [reached, setReached] = React.useState<Record<string, number>>({});
   /** The ply currently being viewed (≤ reached) — scrubbed with ←/→ to analyse. */
@@ -417,12 +424,6 @@ export function PuzzleSolver() {
     ((peakEval.settled || peakEval.failed) &&
       (barEval.settled || barEval.failed));
 
-  /* Lifetime figures — what every meter and the end card report. */
-  const recorded = Object.values(record);
-  const solvedTotal = recorded.filter((o) => o.startsWith("solved")).length;
-  const solvedClean = recorded.filter((o) => o === "solved-clean").length;
-  /** Puzzles finished at least once, however they went. */
-  const attemptedTotal = recorded.length;
   /**
    * How far into the queue this member may go. The counters still read against
    * the full queue ("Puzzle 3 / 8"), so a free member can see what's behind the
@@ -434,13 +435,6 @@ export function PuzzleSolver() {
       : session.length;
   /** Spent in *this* sitting — what a daily allowance is measured against. */
   const finishedThisSession = Object.keys(outcomes).length;
-  /**
-   * Anything ever finished that isn't a clean solve — worth another rep. Read
-   * from the lifetime record so retried puzzles drop off once they go clean.
-   */
-  const unsolvedCount = solvePuzzles.filter(
-    (p) => record[p.id] && record[p.id] !== "solved-clean",
-  ).length;
   /**
    * Free members are stopped by their daily allowance; premium members only see
    * this screen once the whole queue is clear.
@@ -522,14 +516,9 @@ export function PuzzleSolver() {
     setOutcomes((prev) =>
       prev[puzzle.id] ? prev : { ...prev, [puzzle.id]: outcome },
     );
-    // The lifetime record keeps the *best* attempt, so replaying a puzzle you
+    // The shared record keeps the *best* attempt, so replaying a puzzle you
     // needed a hint for and getting it clean is an upgrade, never a downgrade.
-    setRecord((prev) =>
-      RANK[outcome] > RANK[prev[puzzle.id] ?? "failed"] ||
-      prev[puzzle.id] == null
-        ? { ...prev, [puzzle.id]: outcome }
-        : prev,
-    );
+    recordOutcome(puzzle.id, outcome);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reached, puzzle]);
 
@@ -680,6 +669,10 @@ export function PuzzleSolver() {
   // solved; H → hint while solving.
   React.useEffect(() => {
     if (view !== "run") return;
+    // While the completion card or the upgrade celebration is up, the board is
+    // behind a modal: arrows must not scrub a position the user can't see.
+    // Escape stays with the modal, which owns its own handler.
+    if (completeOpen || upgrading) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
@@ -700,7 +693,7 @@ export function PuzzleSolver() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, index, solved, reachedPly, viewPly, userTurn]);
+  }, [view, index, solved, reachedPly, viewPly, userTurn, completeOpen, upgrading]);
 
   const opponent: PlayerRef | null = puzzle
     ? {

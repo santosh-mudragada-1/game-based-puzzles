@@ -85,8 +85,9 @@ const BLUE_BTN =
 /** Same shape in the product's brand green, for the premium actions. */
 const GREEN_BTN =
   "relative flex min-h-[56px] w-full items-center justify-center gap-2 rounded-[10px] bg-gradient-to-b from-brand to-[#5d9948] px-4 text-[22px] font-black leading-[25px] text-white shadow-[0_1px_2px_rgba(0,0,0,0.14),0_2px_4px_rgba(0,0,0,0.1),inset_0_-1px_0_0_#45753c] [text-shadow:0_1px_0_rgba(0,0,0,0.2)] transition hover:brightness-[1.04] active:translate-y-px [&_svg]:size-5";
+// Same 56px block as the primary so the stack reads as one column of buttons.
 const QUIET_BTN =
-  "flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[10px] bg-white/[0.07] text-[15px] font-bold text-white/85 transition hover:bg-white/[0.12] active:translate-y-px [&_svg]:size-4";
+  "flex min-h-[56px] w-full items-center justify-center gap-2 rounded-[10px] bg-white/[0.07] text-[16px] font-bold text-white/85 transition hover:bg-white/[0.12] active:translate-y-px [&_svg]:size-[18px]";
 
 function Stat({ value, label }: { value: string; label: string }) {
   return (
@@ -239,18 +240,20 @@ export function CompletionModal({
               </div>
             </div>
 
-            <p className="w-[304px] text-center text-[16px] font-semibold leading-6 tracking-[-0.32px] text-white/85">
-              {isFree ? (
-                <>Improve faster with puzzles generated from your own games.</>
-              ) : unsolved > 0 ? (
-                <>
-                  {unsolved === 1 ? "One puzzle" : `${unsolved} puzzles`} needed a
-                  hint or a reveal — those are the ones worth another look.
-                </>
-              ) : (
-                <>You solved every puzzle clean. New ones appear as you review more games.</>
-              )}
-            </p>
+            {/* Nothing to say when the queue is clean — the stats already show
+                it, and the buttons speak for themselves. */}
+            {(isFree || unsolved > 0) && (
+              <p className="w-[304px] text-center text-[16px] font-semibold leading-6 tracking-[-0.32px] text-white/85">
+                {isFree ? (
+                  <>Improve faster with puzzles generated from your own games.</>
+                ) : (
+                  <>
+                    {unsolved === 1 ? "One puzzle" : `${unsolved} puzzles`} needed
+                    a hint or a reveal — those are the ones worth another look.
+                  </>
+                )}
+              </p>
+            )}
           </div>
         </div>
 

@@ -90,6 +90,9 @@ export function useEngineEval(
 
     return () => {
       live = false;
+      // Leaving the position (or the page) stops the search — otherwise the
+      // worker carries on burning CPU on a board nobody is looking at.
+      getEngine().cancel();
     };
   }, [fen, userSide, depth, enabled]);
 

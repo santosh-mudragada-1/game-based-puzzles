@@ -1,0 +1,89 @@
+"use client";
+
+import * as React from "react";
+import { solvePuzzles, puzzleProgress } from "@/data/solve-puzzles";
+import type { PuzzleOutcome } from "@/types";
+
+/** Ordering for "keep the best attempt" when a puzzle is replayed. */
+const RANK: Record<PuzzleOutcome, number> = {
+  failed: 0,
+  "solved-hint": 1,
+  "solved-clean": 2,
+};
+
+interface PuzzleProgressValue {
+  /** Best outcome per puzzle id, across every session this visit. */
+  record: Record<string, PuzzleOutcome>;
+  /** File an attempt. Only ever upgrades a puzzle's standing, never downgrades. */
+  recordOutcome: (puzzleId: string, outcome: PuzzleOutcome) => void;
+  /** Puzzles finished with a solve (clean or hinted). */
+  solved: number;
+  /** Puzzles solved with no hint, reveal or wrong move. */
+  clean: number;
+  /** Puzzles finished at least once, however they went. */
+  attempted: number;
+  /** Puzzles that were finished but not cleanly — the retry pool. */
+  unsolved: number;
+  /** Size of the whole queue. */
+  total: number;
+}
+
+const PuzzleProgressContext = React.createContext<PuzzleProgressValue | null>(
+  null,
+);
+
+/**
+ * One source of truth for puzzle progress, shared by every screen.
+ *
+ * Lives above the routes so the home card and the puzzle queue can never
+ * disagree — solving a puzzle updates both immediately, with no refetch and no
+ * refresh. Deliberately **not** persisted: this is a feature prototype, and a
+ * reviewer should get a clean slate on reload (only the chosen plan sticks).
+ */
+export function PuzzleProgressProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [record, setRecord] = React.useState<Record<string, PuzzleOutcome>>({});
+
+  const recordOutcome = React.useCallback(
+    (puzzleId: string, outcome: PuzzleOutcome) => {
+      setRecord((prev) => {
+        const held = prev[puzzleId];
+        if (held != null && RANK[outcome] <= RANK[held]) return prev;
+        return { ...prev, [puzzleId]: outcome };
+      });
+    },
+    [],
+  );
+
+  const value = React.useMemo<PuzzleProgressValue>(() => {
+    const outcomes = Object.values(record);
+    return {
+      record,
+      recordOutcome,
+      solved: outcomes.filter((o) => o.startsWith("solved")).length,
+      clean: outcomes.filter((o) => o === "solved-clean").length,
+      attempted: outcomes.length,
+      unsolved: solvePuzzles.filter(
+        (p) => record[p.id] && record[p.id] !== "solved-clean",
+      ).length,
+      total: puzzleProgress.total,
+    };
+  }, [record, recordOutcome]);
+
+  return (
+    <PuzzleProgressContext.Provider value={value}>
+      {children}
+    </PuzzleProgressContext.Provider>
+  );
+}
+
+export function usePuzzleProgress(): PuzzleProgressValue {
+  const ctx = React.useContext(PuzzleProgressContext);
+  if (!ctx) {
+    throw new Error("usePuzzleProgress must be used within PuzzleProgressProvider");
+  }
+  return ctx;
+}

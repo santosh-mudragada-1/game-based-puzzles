@@ -129,6 +129,21 @@ class StockfishEngine {
   }
 
   /**
+   * Abandon whatever is being searched.
+   *
+   * Bumping the token orphans the in-flight handler so its result is discarded,
+   * and `stop` tells the worker to put the CPU down — without it the engine
+   * keeps thinking about a position nobody is looking at any more.
+   */
+  cancel() {
+    this.token++;
+    if (this.searching) {
+      this.send("stop");
+      this.searching = false;
+    }
+  }
+
+  /**
    * Evaluate `fen` to `depth`, reporting progressively deeper scores through
    * `onUpdate` so the bar settles rather than snapping.
    */

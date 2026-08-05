@@ -7,12 +7,8 @@ import { Avatar } from "@/components/shared/avatar";
 import { Button, type ButtonProps } from "@/components/shared/button";
 import { ProgressBar } from "@/components/shared/progress";
 import { QuickPlayCard } from "./quick-play-card";
-import {
-  puzzlePreview,
-  lessonPreview,
-  gamePreview,
-  gamePuzzlesProgress,
-} from "@/data/home";
+import { GamePuzzlesProgress } from "./game-puzzles-progress";
+import { puzzlePreview, lessonPreview, gamePreview } from "@/data/home";
 import { todaysBlindSpot } from "@/data/training";
 import { formatNumber } from "@/lib/utils";
 import { NAV_ICON, GAME_ICON } from "@/lib/assets";
@@ -138,23 +134,7 @@ export function HeroRow() {
                 height={40}
                 alt=""
               />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] text-ink">
-                  <span className="font-display font-bold tabular-nums text-ink">
-                    {gamePuzzlesProgress.solved}/{gamePuzzlesProgress.total}
-                  </span>{" "}
-                  <span className="text-ink-muted">solved this week</span>
-                </p>
-                <ProgressBar
-                  value={
-                    (gamePuzzlesProgress.solved / gamePuzzlesProgress.total) * 100
-                  }
-                  color="brand"
-                  trackClassName="h-2.5"
-                  className="mt-2"
-                  label="Game puzzles solved this week"
-                />
-              </div>
+              <GamePuzzlesProgress />
             </div>
           </PreviewCard>
 

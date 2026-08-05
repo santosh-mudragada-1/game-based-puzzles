@@ -327,6 +327,9 @@ export interface SolvePuzzle {
  */
 export type PlanTier = "free" | "premium";
 
+/** How a puzzle attempt ended. `solved-clean` = no hint, reveal or wrong move. */
+export type PuzzleOutcome = "solved-clean" | "solved-hint" | "failed";
+
 /** A theme row on the start screen (label + how many puzzles it holds). */
 export interface PuzzleCategoryStat {
   category: PuzzleCategory;
