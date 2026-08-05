@@ -3,6 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
@@ -42,6 +43,15 @@ import {
   CompletionModal,
   type CompletionKind,
 } from "@/components/puzzles/completion-modal";
+// Remotion is only needed for the one-off upgrade celebration, so it stays out
+// of the main bundle until someone actually upgrades.
+const UpgradeTransition = dynamic(
+  () =>
+    import("@/components/puzzles/upgrade-transition").then(
+      (m) => m.UpgradeTransition,
+    ),
+  { ssr: false },
+);
 import { checkedKingSquare, evalLabel, fenAfterMove } from "@/lib/puzzle";
 import { useEngineEval } from "@/hooks/use-engine-eval";
 import type { PieceColor, PlayerRef, PuzzleCategory, SolvePuzzle } from "@/types";
@@ -149,15 +159,71 @@ function ProgressRow({ completed, total }: { completed: number; total: number })
 
 /* ---------------------------------------------------------------- Start view */
 
+/** A single figure in the "where you got to" strip on the start screen. */
+function SessionStat({
+  value,
+  label,
+  tone,
+}: {
+  value: number;
+  label: string;
+  tone: string;
+}) {
+  return (
+    <div className="flex-1 rounded-[8px] bg-black/25 px-2 py-2 text-center">
+      <p className={cn("text-[18px] font-black leading-none tabular-nums", tone)}>
+        {value}
+      </p>
+      <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+        {label}
+      </p>
+    </div>
+  );
+}
+
 function StartView({
   onStart,
+  progress,
 }: {
   onStart: (category: PuzzleCategory | null) => void;
+  /**
+   * Where the member got to before backing out. Present once they've played, so
+   * returning to this screen recaps the run instead of pretending it never
+   * happened; `locked` means Solve will hit the paywall rather than deal a puzzle.
+   */
+  progress?: {
+    done: number;
+    left: number;
+    replay: number;
+    total: number;
+    locked: boolean;
+  };
 }) {
   return (
     <>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4 scrollbar-thin">
-        <CoachBubble text={coachIntro} />
+        <CoachBubble
+          text={
+            progress
+              ? progress.locked
+                ? `You've used today's ${progress.done} free puzzles. ${progress.left} still waiting.`
+                : `${progress.done} done, ${progress.left} to go.`
+              : coachIntro
+          }
+        />
+
+        {progress && (
+          <div className="flex gap-2">
+            <SessionStat value={progress.done} label="Done" tone="text-brand" />
+            <SessionStat value={progress.left} label="Left" tone="text-ink" />
+            <SessionStat
+              value={progress.replay}
+              label="To replay"
+              tone={progress.replay > 0 ? "text-move-inaccuracy" : "text-ink"}
+            />
+          </div>
+        )}
+
         <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
           Pick a theme to drill — or Solve all
         </p>
@@ -189,8 +255,8 @@ function StartView({
       </div>
       <div className="shrink-0 space-y-3 border-t border-line/40 bg-black/[0.14] px-6 pb-6 pt-4">
         <ProgressRow
-          completed={puzzleProgress.completed}
-          total={puzzleProgress.total}
+          completed={progress ? progress.done : puzzleProgress.completed}
+          total={progress ? progress.total : puzzleProgress.total}
         />
         <button
           type="button"
@@ -241,10 +307,14 @@ type View = "start" | "run";
 
 export function PuzzleSolver() {
   const router = useRouter();
-  const plan = usePlan();
+  const { plan, setPlan } = usePlan();
   const [view, setView] = React.useState<View>("start");
   /** The end-of-session celebration, shown over the finished puzzle. */
   const [completeOpen, setCompleteOpen] = React.useState(false);
+  /** Plays once after upgrading, before the queue resumes. */
+  const [upgrading, setUpgrading] = React.useState(false);
+  /** True once a run has happened, so the start screen can recap it. */
+  const [played, setPlayed] = React.useState(false);
   const [session, setSession] = React.useState<SolvePuzzle[]>(solvePuzzles);
   const [index, setIndex] = React.useState(0);
   const [outcomes, setOutcomes] = React.useState<Record<string, Outcome>>({});
@@ -347,18 +417,36 @@ export function PuzzleSolver() {
       ? Math.min(FREE_DAILY_LIMIT, session.length)
       : session.length;
   /**
+   * Puzzles played to the end, however they went. This — not the clean-solve
+   * count — is what a daily allowance is spent on: giving up on one still used it.
+   */
+  const finishedCount = Object.keys(outcomes).length;
+  /**
    * Finished, but with a hint, a reveal or a wrong guess — worth another rep.
-   * Scoped to what they were allowed to attempt, not the whole queue.
+   * Only counts puzzles actually attempted, so untouched ones aren't "to replay".
    */
   const unsolvedCount = session
     .slice(0, dailyLimit)
-    .filter((p) => outcomes[p.id] !== "solved-clean").length;
+    .filter((p) => outcomes[p.id] && outcomes[p.id] !== "solved-clean").length;
   /**
    * Free members are stopped by their daily allowance; premium members only see
    * this screen once the whole queue is clear.
    */
   const completionKind: CompletionKind =
     plan === "free" ? "daily-limit" : "caught-up";
+  /** Free member who has already worked through today's allowance. */
+  const outOfPuzzles =
+    plan === "free" && played && finishedCount >= FREE_DAILY_LIMIT;
+  /** Recap shown when returning to the start screen mid-queue. */
+  const startProgress = played
+    ? {
+        done: finishedCount,
+        left: Math.max(0, puzzleProgress.total - finishedCount),
+        replay: unsolvedCount,
+        total: puzzleProgress.total,
+        locked: outOfPuzzles,
+      }
+    : undefined;
 
   React.useEffect(
     () => () => {
@@ -427,10 +515,16 @@ export function PuzzleSolver() {
     setHintLevel(0);
     setAssisted(false);
     setCompleteOpen(false);
+    setPlayed(true);
     setView("run");
   };
 
   const start = (category: PuzzleCategory | null) => {
+    // Out of puzzles for today — Solve shows the paywall rather than a position.
+    if (outOfPuzzles) {
+      setCompleteOpen(true);
+      return;
+    }
     const q = category
       ? solvePuzzles.filter((p) => p.category === category)
       : solvePuzzles;
@@ -440,11 +534,34 @@ export function PuzzleSolver() {
     beginSession(pool, q.length ? category : null);
   };
 
+  /** The X, the backdrop and "Back to Puzzles" all land back on the start screen. */
+  const closeToStart = () => {
+    setCompleteOpen(false);
+    setView("start");
+  };
+
+  /**
+   * Upgrading happens in place: the session, the outcomes and the position in
+   * the queue all survive, so after the celebration the member carries on at the
+   * puzzle the paywall stopped them at rather than starting over.
+   */
+  const goPremium = () => {
+    setPlan("premium");
+    setCompleteOpen(false);
+    setUpgrading(true);
+  };
+
+  const afterUpgrade = () => {
+    setUpgrading(false);
+    if (index < session.length - 1) gotoPuzzle(index + 1);
+    setView("run");
+  };
+
   /** Re-run only the puzzles that needed a hint, a reveal, or a wrong guess. */
   const retryUnsolved = () => {
     const again = session
       .slice(0, dailyLimit)
-      .filter((p) => outcomes[p.id] !== "solved-clean");
+      .filter((p) => outcomes[p.id] && outcomes[p.id] !== "solved-clean");
     beginSession(again.length ? again : session, sessionCat);
   };
 
@@ -686,7 +803,9 @@ export function PuzzleSolver() {
       <aside className="flex w-full shrink-0 flex-col border-t border-line/60 bg-surface lg:h-screen lg:w-[500px] lg:border-l lg:border-t-0">
         <PanelHeader onBack={backTo} />
 
-        {view === "start" && <StartView onStart={start} />}
+        {view === "start" && (
+          <StartView onStart={start} progress={startProgress} />
+        )}
 
         {view === "run" && puzzle && (
           <>
@@ -850,11 +969,13 @@ export function PuzzleSolver() {
           unsolved={unsolvedCount}
           queueTotal={puzzleProgress.total}
           onRetryUnsolved={retryUnsolved}
-          onReplay={() => start(sessionCat)}
-          onExit={() => router.push("/puzzles")}
-          onUpgrade={() => router.push("/puzzles/game-based?plan=premium")}
+          onReplay={() => beginSession(session, sessionCat)}
+          onExit={closeToStart}
+          onUpgrade={goPremium}
         />
       )}
+
+      {upgrading && <UpgradeTransition onDone={afterUpgrade} />}
     </div>
   );
 }

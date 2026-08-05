@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { PlanProvider } from "@/hooks/use-plan";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -30,7 +31,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} dark`}>
-      <body className="min-h-screen bg-bg">{children}</body>
+      <body className="min-h-screen bg-bg">
+        <PlanProvider>{children}</PlanProvider>
+      </body>
     </html>
   );
 }

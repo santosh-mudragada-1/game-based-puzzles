@@ -15,6 +15,7 @@ import { Logo } from "@/components/shared/logo";
 import { Avatar } from "@/components/shared/avatar";
 import { NAV_ICON, GAME_ICON, ICON } from "@/lib/assets";
 import { currentUser } from "@/data";
+import { usePlan } from "@/hooks/use-plan";
 import { cn } from "@/lib/utils";
 
 type SubItem = {
@@ -248,6 +249,9 @@ export function Sidebar({
   /** Rendered inside the mobile drawer — expands submenus inline (no hover). */
   drawer?: boolean;
 }) {
+  // Premium members have nothing left to upgrade to, so the CTA comes out.
+  const { plan } = usePlan();
+
   return (
     <nav
       aria-label="Primary"
@@ -282,11 +286,15 @@ export function Sidebar({
           item={{ label: "More", icon: ChevronDown }}
           onNavigate={onNavigate}
         />
-        <div className="my-1.5 h-px bg-line/60" />
-        <NavButton
-          item={{ label: "Upgrade", img: ICON.upgrade, accent: "blue" }}
-          onNavigate={onNavigate}
-        />
+        {plan === "free" && (
+          <>
+            <div className="my-1.5 h-px bg-line/60" />
+            <NavButton
+              item={{ label: "Upgrade", img: ICON.upgrade, accent: "blue" }}
+              onNavigate={onNavigate}
+            />
+          </>
+        )}
       </div>
 
       <div className="flex-1" />
