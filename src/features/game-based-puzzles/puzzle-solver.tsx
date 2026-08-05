@@ -514,6 +514,9 @@ export function PuzzleSolver() {
     setRevealing(false);
     setHintLevel(0);
     setAssisted(false);
+    setShakeSignal(0);
+    setWrong(false);
+    if (wrongTimer.current) clearTimeout(wrongTimer.current);
     setCompleteOpen(false);
     setPlayed(true);
     setView("run");
