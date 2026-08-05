@@ -253,6 +253,13 @@ export const puzzleProgress = {
   total: solvePuzzles.length,
 };
 
+/**
+ * How many game-based puzzles a free member can solve per day. Premium members
+ * get the whole queue — the gap between this and `puzzleProgress.total` is the
+ * upgrade pitch.
+ */
+export const FREE_DAILY_LIMIT = 3;
+
 /** Coach's opening line on the start screen. */
 export const coachIntro = `${solvePuzzles.length} new puzzles generated from your last 5 games.`;
 

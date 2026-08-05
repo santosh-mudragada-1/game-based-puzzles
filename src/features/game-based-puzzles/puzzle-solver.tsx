@@ -17,7 +17,6 @@ import {
   RotateCcw,
   Search,
   ExternalLink,
-  Trophy,
   Check,
 } from "lucide-react";
 
@@ -36,7 +35,13 @@ import {
   coachIntro,
   CATEGORY_LABEL,
   CATEGORY_MOVE_ICON,
+  FREE_DAILY_LIMIT,
 } from "@/data/solve-puzzles";
+import { usePlan } from "@/hooks/use-plan";
+import {
+  CompletionModal,
+  type CompletionKind,
+} from "@/components/puzzles/completion-modal";
 import { checkedKingSquare, evalLabel, fenAfterMove } from "@/lib/puzzle";
 import { useEngineEval } from "@/hooks/use-engine-eval";
 import type { PieceColor, PlayerRef, PuzzleCategory, SolvePuzzle } from "@/types";
@@ -230,87 +235,16 @@ function ClassificationTag({ puzzle }: { puzzle: SolvePuzzle }) {
   );
 }
 
-/* ------------------------------------------------------------ Complete view */
-
-function CompleteView({
-  solvedClean,
-  solvedTotal,
-  failed,
-  total,
-  onReplay,
-  onExit,
-}: {
-  solvedClean: number;
-  solvedTotal: number;
-  failed: number;
-  total: number;
-  onReplay: () => void;
-  onExit: () => void;
-}) {
-  const accuracy = total ? Math.round((solvedClean / total) * 100) : 0;
-  const plural = total === 1 ? "" : "s";
-  return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-6 py-8 text-center">
-      <span className="grid size-20 place-items-center rounded-full bg-brand/15">
-        <Trophy className="size-10 text-brand" />
-      </span>
-      <div className="space-y-1.5">
-        <h3 className="font-display text-[26px] font-black text-white">
-          Set complete!
-        </h3>
-        <p className="max-w-[320px] text-[15px] text-ink-muted">
-          You worked through {total} puzzle{plural} from your recent games
-          {failed > 0 ? `, revealing ${failed}` : ""}. Keep drilling and the
-          blind spots disappear.
-        </p>
-      </div>
-
-      <div className="grid w-full max-w-[360px] grid-cols-3 gap-2">
-        {[
-          { label: "Solved", value: `${solvedTotal}/${total}`, tone: "text-brand" },
-          { label: "Clean", value: `${solvedClean}/${total}`, tone: "text-white" },
-          { label: "Accuracy", value: `${accuracy}%`, tone: "text-white" },
-        ].map((s) => (
-          <div
-            key={s.label}
-            className="rounded-[10px] bg-black/20 px-2 py-3"
-          >
-            <p className={cn("text-[22px] font-black tabular-nums", s.tone)}>
-              {s.value}
-            </p>
-            <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
-              {s.label}
-            </p>
-          </div>
-        ))}
-      </div>
-      <div className="mt-2 flex w-full max-w-[360px] flex-col gap-2">
-        <button
-          type="button"
-          onClick={onReplay}
-          className={cn(GREEN_BTN, "w-full")}
-        >
-          <RotateCcw /> Solve again
-        </button>
-        <button
-          type="button"
-          onClick={onExit}
-          className={cn(DARK_BTN, "w-full")}
-        >
-          Back to puzzles
-        </button>
-      </div>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------- Screen */
 
-type View = "start" | "run" | "complete";
+type View = "start" | "run";
 
 export function PuzzleSolver() {
   const router = useRouter();
+  const plan = usePlan();
   const [view, setView] = React.useState<View>("start");
+  /** The end-of-session celebration, shown over the finished puzzle. */
+  const [completeOpen, setCompleteOpen] = React.useState(false);
   const [session, setSession] = React.useState<SolvePuzzle[]>(solvePuzzles);
   const [index, setIndex] = React.useState(0);
   const [outcomes, setOutcomes] = React.useState<Record<string, Outcome>>({});
@@ -403,9 +337,29 @@ export function PuzzleSolver() {
   const solvedClean = Object.values(outcomes).filter(
     (o) => o === "solved-clean",
   ).length;
-  const failedCount = Object.values(outcomes).filter(
-    (o) => o === "failed",
-  ).length;
+  /**
+   * How far into the queue this member may go. The counters still read against
+   * the full queue ("Puzzle 3 / 8"), so a free member can see what's behind the
+   * paywall rather than being shown a queue that looks three long.
+   */
+  const dailyLimit =
+    plan === "free"
+      ? Math.min(FREE_DAILY_LIMIT, session.length)
+      : session.length;
+  /**
+   * Finished, but with a hint, a reveal or a wrong guess — worth another rep.
+   * Scoped to what they were allowed to attempt, not the whole queue.
+   */
+  const unsolvedCount = session
+    .slice(0, dailyLimit)
+    .filter((p) => outcomes[p.id] !== "solved-clean").length;
+  /**
+   * Free members are stopped by their daily allowance; premium members only see
+   * this screen once the whole queue is clear.
+   */
+  const completionKind: CompletionKind =
+    plan === "free" ? "daily-limit" : "caught-up";
+
   React.useEffect(
     () => () => {
       if (wrongTimer.current) clearTimeout(wrongTimer.current);
@@ -457,12 +411,13 @@ export function PuzzleSolver() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reached, puzzle]);
 
-  const start = (category: PuzzleCategory | null) => {
-    const q = category
-      ? solvePuzzles.filter((p) => p.category === category)
-      : solvePuzzles;
-    setSession(q.length ? q : solvePuzzles);
-    setSessionCat(q.length ? category : null);
+  /** Load a set of puzzles and reset every per-session flag. */
+  const beginSession = (
+    puzzles: SolvePuzzle[],
+    category: PuzzleCategory | null,
+  ) => {
+    setSession(puzzles);
+    setSessionCat(category);
     setIndex(0);
     setOutcomes({});
     setReached({});
@@ -471,7 +426,26 @@ export function PuzzleSolver() {
     setRevealing(false);
     setHintLevel(0);
     setAssisted(false);
+    setCompleteOpen(false);
     setView("run");
+  };
+
+  const start = (category: PuzzleCategory | null) => {
+    const q = category
+      ? solvePuzzles.filter((p) => p.category === category)
+      : solvePuzzles;
+    const pool = q.length ? q : solvePuzzles;
+    // The queue is never trimmed for free members: they should see all of it —
+    // and how far in the wall sits. `dailyLimit` is what actually stops them.
+    beginSession(pool, q.length ? category : null);
+  };
+
+  /** Re-run only the puzzles that needed a hint, a reveal, or a wrong guess. */
+  const retryUnsolved = () => {
+    const again = session
+      .slice(0, dailyLimit)
+      .filter((p) => outcomes[p.id] !== "solved-clean");
+    beginSession(again.length ? again : session, sessionCat);
   };
 
   const onMove = (from: string, to: string) => {
@@ -537,8 +511,8 @@ export function PuzzleSolver() {
     if (wrongTimer.current) clearTimeout(wrongTimer.current);
   };
   const next = () => {
-    if (index < session.length - 1) gotoPuzzle(index + 1);
-    else setView("complete");
+    if (index < dailyLimit - 1) gotoPuzzle(index + 1);
+    else setCompleteOpen(true);
   };
 
   // Keyboard: ←/→ step through the moves (any time); Enter → next puzzle when
@@ -714,17 +688,6 @@ export function PuzzleSolver() {
 
         {view === "start" && <StartView onStart={start} />}
 
-        {view === "complete" && (
-          <CompleteView
-            solvedClean={solvedClean}
-            solvedTotal={solvedTotal}
-            failed={failedCount}
-            total={session.length}
-            onReplay={() => start(sessionCat)}
-            onExit={() => router.push("/puzzles")}
-          />
-        )}
-
         {view === "run" && puzzle && (
           <>
             {/* Coach + classification tag */}
@@ -797,6 +760,11 @@ export function PuzzleSolver() {
                     onClick={next}
                     className={cn(GREEN_BTN, "flex-1")}
                   >
+                    {/* Reads against the whole queue, not the daily allowance:
+                        a free member on 3/8 still has puzzles ahead, so the
+                        button says "Next" and it's the paywall card that
+                        explains why it stops there. Only a genuinely empty
+                        queue says "Finish". */}
                     {index < session.length - 1 ? (
                       <>
                         Next <ArrowRight />
@@ -861,7 +829,7 @@ export function PuzzleSolver() {
                     type="button"
                     aria-label="Next puzzle"
                     onClick={() => gotoPuzzle(index + 1)}
-                    disabled={index >= session.length - 1}
+                    disabled={index >= dailyLimit - 1}
                     className="grid size-8 place-items-center rounded-[5px] text-ink-soft transition-colors hover:bg-white/[0.06] hover:text-ink disabled:pointer-events-none disabled:opacity-40"
                   >
                     <ChevronsRight className="size-[18px]" />
@@ -873,7 +841,20 @@ export function PuzzleSolver() {
         )}
       </aside>
 
-      <Confetti run={view === "complete"} />
+      {completeOpen && (
+        <CompletionModal
+          kind={completionKind}
+          solvedClean={solvedClean}
+          solvedTotal={solvedTotal}
+          attempted={dailyLimit}
+          unsolved={unsolvedCount}
+          queueTotal={puzzleProgress.total}
+          onRetryUnsolved={retryUnsolved}
+          onReplay={() => start(sessionCat)}
+          onExit={() => router.push("/puzzles")}
+          onUpgrade={() => router.push("/puzzles/game-based?plan=premium")}
+        />
+      )}
     </div>
   );
 }

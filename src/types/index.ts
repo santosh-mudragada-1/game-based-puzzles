@@ -321,6 +321,12 @@ export interface SolvePuzzle {
   reviewPly: number;
 }
 
+/**
+ * Membership tier. Free members get a daily allowance of game-based puzzles;
+ * premium members get the whole queue.
+ */
+export type PlanTier = "free" | "premium";
+
 /** A theme row on the start screen (label + how many puzzles it holds). */
 export interface PuzzleCategoryStat {
   category: PuzzleCategory;
