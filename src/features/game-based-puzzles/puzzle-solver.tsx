@@ -68,6 +68,13 @@ const ICON_BTN =
 
 type Outcome = "solved-clean" | "solved-hint" | "failed";
 
+/** Ordering for "keep the best attempt" when a puzzle is replayed. */
+const RANK: Record<Outcome, number> = {
+  failed: 0,
+  "solved-hint": 1,
+  "solved-clean": 2,
+};
+
 /** The trainee, playing whichever side the puzzle is to move. */
 function mePlayer(side: PieceColor): PlayerRef {
   return {
@@ -318,6 +325,15 @@ export function PuzzleSolver() {
   const [session, setSession] = React.useState<SolvePuzzle[]>(solvePuzzles);
   const [index, setIndex] = React.useState(0);
   const [outcomes, setOutcomes] = React.useState<Record<string, Outcome>>({});
+  /**
+   * Every puzzle ever finished, best result kept, across all sessions.
+   *
+   * `outcomes` is deliberately wiped whenever a session starts, so on its own it
+   * would report "3/8" after retrying three puzzles even though all eight had
+   * been solved. This is the record the progress meters and the end card read,
+   * so drilling one theme and then another adds up instead of starting over.
+   */
+  const [record, setRecord] = React.useState<Record<string, Outcome>>({});
   /** Furthest ply reached per puzzle (progress) — advances on each played move. */
   const [reached, setReached] = React.useState<Record<string, number>>({});
   /** The ply currently being viewed (≤ reached) — scrubbed with ←/→ to analyse. */
@@ -401,12 +417,12 @@ export function PuzzleSolver() {
     ((peakEval.settled || peakEval.failed) &&
       (barEval.settled || barEval.failed));
 
-  const solvedTotal = Object.values(outcomes).filter((o) =>
-    o.startsWith("solved"),
-  ).length;
-  const solvedClean = Object.values(outcomes).filter(
-    (o) => o === "solved-clean",
-  ).length;
+  /* Lifetime figures — what every meter and the end card report. */
+  const recorded = Object.values(record);
+  const solvedTotal = recorded.filter((o) => o.startsWith("solved")).length;
+  const solvedClean = recorded.filter((o) => o === "solved-clean").length;
+  /** Puzzles finished at least once, however they went. */
+  const attemptedTotal = recorded.length;
   /**
    * How far into the queue this member may go. The counters still read against
    * the full queue ("Puzzle 3 / 8"), so a free member can see what's behind the
@@ -416,18 +432,15 @@ export function PuzzleSolver() {
     plan === "free"
       ? Math.min(FREE_DAILY_LIMIT, session.length)
       : session.length;
+  /** Spent in *this* sitting — what a daily allowance is measured against. */
+  const finishedThisSession = Object.keys(outcomes).length;
   /**
-   * Puzzles played to the end, however they went. This — not the clean-solve
-   * count — is what a daily allowance is spent on: giving up on one still used it.
+   * Anything ever finished that isn't a clean solve — worth another rep. Read
+   * from the lifetime record so retried puzzles drop off once they go clean.
    */
-  const finishedCount = Object.keys(outcomes).length;
-  /**
-   * Finished, but with a hint, a reveal or a wrong guess — worth another rep.
-   * Only counts puzzles actually attempted, so untouched ones aren't "to replay".
-   */
-  const unsolvedCount = session
-    .slice(0, dailyLimit)
-    .filter((p) => outcomes[p.id] && outcomes[p.id] !== "solved-clean").length;
+  const unsolvedCount = solvePuzzles.filter(
+    (p) => record[p.id] && record[p.id] !== "solved-clean",
+  ).length;
   /**
    * Free members are stopped by their daily allowance; premium members only see
    * this screen once the whole queue is clear.
@@ -436,12 +449,28 @@ export function PuzzleSolver() {
     plan === "free" ? "daily-limit" : "caught-up";
   /** Free member who has already worked through today's allowance. */
   const outOfPuzzles =
-    plan === "free" && played && finishedCount >= FREE_DAILY_LIMIT;
+    plan === "free" && played && finishedThisSession >= FREE_DAILY_LIMIT;
+  /**
+   * The next theme still holding puzzles this member hasn't solved cleanly —
+   * the natural thing to offer once a theme is cleared.
+   */
+  const nextCategory = React.useMemo(() => {
+    const order = puzzleCategoryStats.map((c) => c.category);
+    const from = sessionCat ? order.indexOf(sessionCat) + 1 : 0;
+    const rotated = [...order.slice(from), ...order.slice(0, Math.max(0, from))];
+    return (
+      rotated.find((cat) =>
+        solvePuzzles.some(
+          (p) => p.category === cat && record[p.id] !== "solved-clean",
+        ),
+      ) ?? null
+    );
+  }, [sessionCat, record]);
   /** Recap shown when returning to the start screen mid-queue. */
   const startProgress = played
     ? {
-        done: finishedCount,
-        left: Math.max(0, puzzleProgress.total - finishedCount),
+        done: solvedTotal,
+        left: Math.max(0, puzzleProgress.total - attemptedTotal),
         replay: unsolvedCount,
         total: puzzleProgress.total,
         locked: outOfPuzzles,
@@ -484,17 +513,22 @@ export function PuzzleSolver() {
   React.useEffect(() => {
     if (!puzzle || puzzle.line.length === 0) return;
     if ((reached[puzzle.id] ?? 0) < puzzle.line.length) return;
+    const outcome: Outcome = revealing
+      ? "failed"
+      : assisted || erred[puzzle.id]
+        ? "solved-hint"
+        : "solved-clean";
+
     setOutcomes((prev) =>
-      prev[puzzle.id]
-        ? prev
-        : {
-            ...prev,
-            [puzzle.id]: revealing
-              ? "failed"
-              : assisted || erred[puzzle.id]
-                ? "solved-hint"
-                : "solved-clean",
-          },
+      prev[puzzle.id] ? prev : { ...prev, [puzzle.id]: outcome },
+    );
+    // The lifetime record keeps the *best* attempt, so replaying a puzzle you
+    // needed a hint for and getting it clean is an upgrade, never a downgrade.
+    setRecord((prev) =>
+      RANK[outcome] > RANK[prev[puzzle.id] ?? "failed"] ||
+      prev[puzzle.id] == null
+        ? { ...prev, [puzzle.id]: outcome }
+        : prev,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reached, puzzle]);
@@ -562,10 +596,15 @@ export function PuzzleSolver() {
 
   /** Re-run only the puzzles that needed a hint, a reveal, or a wrong guess. */
   const retryUnsolved = () => {
-    const again = session
-      .slice(0, dailyLimit)
-      .filter((p) => outcomes[p.id] && outcomes[p.id] !== "solved-clean");
+    const again = solvePuzzles.filter(
+      (p) => record[p.id] && record[p.id] !== "solved-clean",
+    );
     beginSession(again.length ? again : session, sessionCat);
+  };
+
+  /** Move on to the next theme that still has puzzles to clean up. */
+  const solveNextCategory = () => {
+    if (nextCategory) start(nextCategory);
   };
 
   const onMove = (from: string, to: string) => {
@@ -970,9 +1009,18 @@ export function PuzzleSolver() {
           kind={completionKind}
           solvedClean={solvedClean}
           solvedTotal={solvedTotal}
-          attempted={dailyLimit}
+          attempted={attemptedTotal}
           unsolved={unsolvedCount}
           queueTotal={puzzleProgress.total}
+          nextCategoryLabel={
+            nextCategory
+              ? // The plural theme label ("Mistakes"), matching the list on the
+                // start screen rather than the singular tag used on the board.
+                (puzzleCategoryStats.find((c) => c.category === nextCategory)
+                  ?.label ?? CATEGORY_LABEL[nextCategory])
+              : null
+          }
+          onSolveNextCategory={solveNextCategory}
           onRetryUnsolved={retryUnsolved}
           onReplay={() => beginSession(session, sessionCat)}
           onExit={closeToStart}

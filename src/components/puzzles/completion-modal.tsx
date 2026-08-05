@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { RotateCcw, Target, X } from "lucide-react";
+import { ArrowRight, RotateCcw, Target, X } from "lucide-react";
 
 import { Confetti } from "@/components/shared/confetti";
 import { GAME_ICON } from "@/lib/assets";
@@ -109,13 +109,16 @@ interface CompletionModalProps {
   solvedClean: number;
   /** Puzzles finished at all. */
   solvedTotal: number;
-  /** Puzzles this member was allowed to work through. */
+  /** Puzzles finished at least once, across every session. */
   attempted: number;
   /** Puzzles that weren't solved cleanly — the retry target. */
   unsolved: number;
   /** The full queue, which free members can see but not finish. */
   queueTotal: number;
+  /** Label of the next theme still holding unsolved puzzles, if any. */
+  nextCategoryLabel?: string | null;
   onRetryUnsolved: () => void;
+  onSolveNextCategory: () => void;
   onReplay: () => void;
   onExit: () => void;
   onUpgrade: () => void;
@@ -136,7 +139,9 @@ export function CompletionModal({
   attempted,
   unsolved,
   queueTotal,
+  nextCategoryLabel,
   onRetryUnsolved,
+  onSolveNextCategory,
   onReplay,
   onExit,
   onUpgrade,
@@ -253,25 +258,40 @@ export function CompletionModal({
             </button>
           ) : (
             <>
-              {unsolved > 0 ? (
-                <button ref={primaryRef} type="button" onClick={onRetryUnsolved} className={GREEN_BTN}>
+              {/* Most useful first: clean up what went badly, then move on to
+                  the next theme, then replay what was just finished. */}
+              {unsolved > 0 && (
+                <button
+                  ref={primaryRef}
+                  type="button"
+                  onClick={onRetryUnsolved}
+                  className={GREEN_BTN}
+                >
                   <Target />
                   Retry {unsolved}
                 </button>
-              ) : (
-                <button ref={primaryRef} type="button" onClick={onReplay} className={GREEN_BTN}>
-                  <RotateCcw />
-                  Solve again
+              )}
+              {nextCategoryLabel && (
+                <button
+                  ref={unsolved > 0 ? undefined : primaryRef}
+                  type="button"
+                  onClick={onSolveNextCategory}
+                  className={unsolved > 0 ? QUIET_BTN : GREEN_BTN}
+                >
+                  <ArrowRight />
+                  Solve {nextCategoryLabel}
                 </button>
               )}
-              {unsolved > 0 && (
-                <button type="button" onClick={onReplay} className={QUIET_BTN}>
-                  <RotateCcw />
-                  Solve all {attempted} again
-                </button>
-              )}
-              <button type="button" onClick={onExit} className={QUIET_BTN}>
-                Back to Puzzles
+              <button
+                ref={unsolved > 0 || nextCategoryLabel ? undefined : primaryRef}
+                type="button"
+                onClick={onReplay}
+                className={
+                  unsolved > 0 || nextCategoryLabel ? QUIET_BTN : GREEN_BTN
+                }
+              >
+                <RotateCcw />
+                Solve again
               </button>
             </>
           )}
