@@ -3,16 +3,39 @@
 import * as React from "react";
 import type { ArchivedGame } from "@/lib/chesscom";
 
-/** Stop here rather than pulling a decade of blitz off the API. */
-const MAX_MONTHS = 12;
-const MAX_GAMES = 400;
+/**
+ * Months fetched at a time. Chess.com is fine with a handful of parallel
+ * reads and it turns a 27-month archive from a minute into a few seconds;
+ * going wider starts drawing rate limits.
+ */
+const BATCH = 4;
 const STORAGE_KEY = "gbp:chesscom";
+
+export interface RatingBucket {
+  rating: number | null;
+  best: number | null;
+  win: number;
+  loss: number;
+  draw: number;
+}
 
 export interface ChessProfile {
   username: string;
   name: string | null;
   avatar: string | null;
   country: string | null;
+  title: string | null;
+  followers: number | null;
+  joined: number | null;
+  lastOnline: number | null;
+  url: string | null;
+  stats: {
+    rapid: RatingBucket | null;
+    blitz: RatingBucket | null;
+    bullet: RatingBucket | null;
+    daily: RatingBucket | null;
+    puzzles: number | null;
+  };
 }
 
 export interface LoadProgress {
@@ -38,6 +61,8 @@ interface ChessAccountValue {
   ready: boolean;
   /** This load came from a remembered username, not from the dialog. */
   restored: boolean;
+  /** Bumped on disconnect, to put the username prompt back on screen. */
+  promptNonce: number;
   connect: (username: string, silent?: boolean) => Promise<void>;
   disconnect: () => void;
 }
@@ -74,6 +99,7 @@ export function ChessAccountProvider({
   const [error, setError] = React.useState<string | null>(null);
   const [ready, setReady] = React.useState(false);
   const [restored, setRestored] = React.useState(false);
+  const [promptNonce, setPromptNonce] = React.useState(0);
   const [progress, setProgress] = React.useState<LoadProgress>({
     done: 0,
     total: 0,
@@ -113,11 +139,24 @@ export function ChessAccountProvider({
         name: data.name,
         avatar: data.avatar,
         country: data.country,
+        title: data.title ?? null,
+        followers: data.followers ?? null,
+        joined: data.joined ?? null,
+        lastOnline: data.lastOnline ?? null,
+        url: data.url ?? null,
+        stats: data.stats ?? {
+          rapid: null,
+          blitz: null,
+          bullet: null,
+          daily: null,
+          puzzles: null,
+        },
       };
       setProfile(found);
       window.localStorage.setItem(STORAGE_KEY, found.username);
 
-      const archives: string[] = (data.archives ?? []).slice(0, MAX_MONTHS);
+      // Every month the account has — "all my games" means all of them.
+      const archives: string[] = data.archives ?? [];
       if (archives.length === 0) {
         setStatus("ready");
         setProgress({ done: 0, total: 0, games: 0, label: "" });
@@ -125,29 +164,35 @@ export function ChessAccountProvider({
       }
 
       const collected: ArchivedGame[] = [];
-      for (let i = 0; i < archives.length; i++) {
+      for (let i = 0; i < archives.length; i += BATCH) {
+        const slice = archives.slice(i, i + BATCH);
         setProgress({
           done: i,
           total: archives.length,
           games: collected.length,
-          label: archiveLabel(archives[i]),
+          label: archiveLabel(slice[0]),
         });
 
-        const monthRes = await fetch(
-          `/api/chesscom/month?u=${encodeURIComponent(found.username)}&archive=${encodeURIComponent(archives[i])}`,
+        const months = await Promise.all(
+          slice.map((a) =>
+            fetch(
+              `/api/chesscom/month?u=${encodeURIComponent(found.username)}&archive=${encodeURIComponent(a)}`,
+            ).then((r) => r.json()),
+          ),
         );
         if (run !== runId.current) return;
-        const month = await monthRes.json();
-        collected.push(...((month.games ?? []) as ArchivedGame[]));
+        for (const m of months)
+          collected.push(...((m.games ?? []) as ArchivedGame[]));
 
         // Show them as they arrive — the list fills in rather than blinking on.
-        setGames([...collected]);
-        if (collected.length >= MAX_GAMES) break;
+        setGames(
+          [...collected].sort((a, b) => b.endTime - a.endTime),
+        );
       }
 
       if (run !== runId.current) return;
       collected.sort((a, b) => b.endTime - a.endTime);
-      setGames(collected.slice(0, MAX_GAMES));
+      setGames(collected);
       setProgress({
         done: archives.length,
         total: archives.length,
@@ -170,6 +215,7 @@ export function ChessAccountProvider({
     setStatus("idle");
     setError(null);
     setRestored(false);
+    setPromptNonce((n) => n + 1);
   }, []);
 
   // A remembered username reconnects itself on load.
@@ -188,6 +234,7 @@ export function ChessAccountProvider({
       progress,
       ready,
       restored,
+      promptNonce,
       connect,
       disconnect,
     }),
@@ -199,6 +246,7 @@ export function ChessAccountProvider({
       progress,
       ready,
       restored,
+      promptNonce,
       connect,
       disconnect,
     ],

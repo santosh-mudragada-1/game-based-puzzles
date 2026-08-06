@@ -7,17 +7,20 @@ interface AvatarProps {
   size?: number;
   alt?: string;
   rounded?: "sm" | "md" | "full";
+  /** A real photo (e.g. the connected member's Chess.com avatar). */
+  src?: string | null;
   className?: string;
 }
 
 /**
- * Placeholder avatar — Chess.com's official "no photo" default (a grey pawn).
- * No real user photos are used in this prototype.
+ * A member's photo when we have one, otherwise Chess.com's official "no photo"
+ * default (a grey pawn).
  */
 export function Avatar({
   size = 32,
   alt = "Player avatar",
   rounded = "sm",
+  src,
   className,
 }: AvatarProps) {
   const radius =
@@ -29,7 +32,7 @@ export function Avatar({
       style={{ width: size, height: size, borderRadius: radius }}
     >
       <Image
-        src={ICON.noAvatar}
+        src={src || ICON.noAvatar}
         alt={alt}
         width={size}
         height={size}

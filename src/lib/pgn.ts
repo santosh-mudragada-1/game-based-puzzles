@@ -1,4 +1,5 @@
 import { Chess } from "chess.js";
+import { accuracyFrom } from "@/lib/classify";
 import type {
   ClassificationRow,
   GeneratedPuzzle,
@@ -347,7 +348,7 @@ const NOTABLE_CLASSES = new Set<MoveClassification>([
   "blunder",
 ]);
 
-function computeNotable(model: ReviewModel): Set<number> {
+export function computeNotable(model: ReviewModel): Set<number> {
   // Only the *final* book move (the last one before leaving theory) is badged.
   let lastBook = 0;
   for (const p of model.plies) if (p.classification === "book") lastBook = p.ply;
@@ -363,11 +364,13 @@ function computeNotable(model: ReviewModel): Set<number> {
   return set;
 }
 
-/** Ply numbers (1-based) that the move list badges and "Next" jumps between. */
-export const notablePlySet: Set<number> = computeNotable(reviewModel);
-
-/** Sorted list of the notable plies, for "play to the next important move". */
-export const notablePlies: number[] = [...notablePlySet].sort((a, b) => a - b);
+/**
+ * Ply numbers (1-based) that the move list badges and "Next" jumps between.
+ * Derived per model, since a game clicked out of the archive has its own.
+ */
+export function notablePliesOf(model: ReviewModel): number[] {
+  return [...computeNotable(model)].sort((a, b) => a - b);
+}
 
 const PIECE_VAL: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 
@@ -455,3 +458,108 @@ export const gamePuzzles: GeneratedPuzzle[] = PUZZLE_DEFS.map((d, i) => {
     blurb: d.blurb,
   };
 });
+
+/**
+ * Build a review model from any PGN plus a per-ply analysis — the path taken by
+ * a game pulled off Chess.com, where the analysis was produced in the browser
+ * rather than baked in ahead of time.
+ */
+export function buildModelFromPgn(
+  pgn: string,
+  username: string,
+  rows: { classification: MoveClassification; cp: number; mate: number | null; wpLoss: number }[],
+): ReviewModel {
+  const game = new Chess();
+  game.loadPgn(pgn);
+  const header = game.header();
+  const verbose = game.history({ verbose: true });
+
+  const commentByFen = new Map<string, string>();
+  for (const c of game.getComments()) commentByFen.set(c.fen, c.comment);
+
+  const replay = new Chess();
+  const plies: ReviewPly[] = verbose.map((m, i) => {
+    replay.move(m.san);
+    const fen = replay.fen();
+    const row = rows[i];
+    return {
+      ply: i + 1,
+      moveNo: Math.floor(i / 2) + 1,
+      side: (m.color === "w" ? "white" : "black") as PieceColor,
+      san: m.san,
+      from: m.from,
+      to: m.to,
+      fen,
+      // Un-analysed plies sit at "good", which the move list leaves un-badged.
+      classification: row?.classification ?? "good",
+      evalCp: row?.cp ?? 0,
+      evalMate: row?.mate ?? null,
+      clock: parseClock(commentByFen.get(fen) ?? ""),
+    };
+  });
+
+  const tally = (side: PieceColor) =>
+    CLASS_ORDER.reduce<Record<string, number>>((acc, c) => {
+      acc[c] = plies.filter(
+        (p) => p.side === side && p.classification === c,
+      ).length;
+      return acc;
+    }, {});
+  const w = tally("white");
+  const b = tally("black");
+  const counts: ClassificationRow[] = CLASS_ORDER.map((c) => ({
+    classification: c,
+    white: w[c] ?? 0,
+    black: b[c] ?? 0,
+  }));
+
+  const lossesFor = (side: PieceColor) =>
+    rows.filter((_, i) => plies[i]?.side === side).map((r) => r.wpLoss);
+  const accuracy = {
+    white: accuracyFrom(lossesFor("white")),
+    black: accuracyFrom(lossesFor("black")),
+  };
+
+  const lower = username.toLowerCase();
+  const userSide: PieceColor =
+    (header.Black ?? "").toLowerCase() === lower ? "black" : "white";
+
+  return {
+    white: {
+      username: header.White ?? "White",
+      rating: Number(header.WhiteElo ?? 0),
+      color: "white",
+    },
+    black: {
+      username: header.Black ?? "Black",
+      rating: Number(header.BlackElo ?? 0),
+      color: "black",
+    },
+    opening: openingName(header),
+    userSide,
+    plies,
+    counts,
+    accuracy,
+    // Chess.com's "game rating" is a rating-band estimate; ours is a plain
+    // read of accuracy so it can't claim more precision than it has.
+    gameRating: {
+      white: Math.round(accuracy.white * 20),
+      black: Math.round(accuracy.black * 20),
+    },
+    phases: [
+      { phase: "Opening", white: "good", black: "good" },
+      { phase: "Middlegame", white: "ok", black: "ok" },
+      { phase: "Endgame", white: "ok", black: "ok" },
+    ],
+  };
+}
+
+/** Chess.com puts the opening in an ECOUrl header; fall back to the code. */
+function openingName(header: Record<string, string | null | undefined>): string {
+  const url = header.ECOUrl;
+  if (url) {
+    const slug = url.split("/").pop() ?? "";
+    return slug.replace(/-/g, " ").replace(/\s(\d+)\s/g, " $1 ");
+  }
+  return header.ECO ?? "Unknown opening";
+}

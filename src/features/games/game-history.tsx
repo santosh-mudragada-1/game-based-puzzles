@@ -3,7 +3,12 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown, Search } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+} from "lucide-react";
 
 import { Avatar } from "@/components/shared/avatar";
 import { FavoriteHeart } from "@/components/dashboard/favorite-heart";
@@ -22,6 +27,13 @@ const CLASS_ICON: Record<string, string> = {
   bullet: GAME_ICON.bullet,
   daily: GAME_ICON.daily,
 };
+
+/** The small pill buttons in a row — Review and Solve share it. */
+const ROW_BTN =
+  "inline-flex h-8 w-full items-center justify-center rounded-[6px] bg-gradient-to-b from-white/[0.1] to-white/[0.05] px-3 text-[13px] font-semibold text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:from-white/[0.14] hover:to-white/[0.08] active:translate-y-px";
+
+/** Games per page — enough to fill the screen, few enough to stay snappy. */
+const PAGE_SIZE = 25;
 
 const DATE_FMT = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -160,21 +172,30 @@ function GameRow({
         <ResultIcon result={game.result} />
       </div>
 
-      {/* Accuracies when Chess.com has already reviewed it, else a Review link */}
-      <div className="w-[104px] shrink-0 text-center">
+      {/* Chess.com's own accuracies, when it has already reviewed the game */}
+      <div className="w-[52px] shrink-0 text-center">
         {game.accuracies ? (
           <div className="flex flex-col gap-1 text-xs font-semibold tabular-nums text-ink-muted">
             <span>{game.accuracies.white.toFixed(1)}</span>
             <span>{game.accuracies.black.toFixed(1)}</span>
           </div>
         ) : (
-          <Link
-            href="/review"
-            className="inline-flex h-8 items-center justify-center rounded-[6px] bg-gradient-to-b from-white/[0.1] to-white/[0.05] px-5 text-[13px] font-semibold text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:from-white/[0.14] hover:to-white/[0.08]"
-          >
-            Rev
-          </Link>
+          <span className="text-2xs font-semibold text-ink-faint">–</span>
         )}
+      </div>
+
+      {/* Our own review — the PGN goes to Stockfish when this is clicked */}
+      <div className="w-[86px] shrink-0 text-center">
+        <Link href={`/review?game=${game.id}`} className={ROW_BTN}>
+          Review
+        </Link>
+      </div>
+
+      {/* Drill the mistakes this game gave up */}
+      <div className="w-[76px] shrink-0 text-center">
+        <Link href="/puzzles/game-based" className={ROW_BTN}>
+          Solve
+        </Link>
       </div>
 
       <span className="w-9 shrink-0 text-center text-[13px] font-semibold tabular-nums text-ink-muted">
@@ -203,9 +224,86 @@ function RowSkeleton() {
         <div className="h-3.5 w-52 animate-pulse rounded bg-white/[0.05]" />
         <div className="h-3.5 w-44 animate-pulse rounded bg-white/[0.05]" />
       </div>
-      <div className="h-8 w-[104px] shrink-0 animate-pulse rounded bg-white/[0.05]" />
+      <div className="h-8 w-[86px] shrink-0 animate-pulse rounded bg-white/[0.05]" />
+      <div className="h-8 w-[76px] shrink-0 animate-pulse rounded bg-white/[0.05]" />
       <div className="h-4 w-[104px] shrink-0 animate-pulse rounded bg-white/[0.05]" />
     </div>
+  );
+}
+
+/** Page numbers with ellipses — first, last and a window around the current. */
+function pageWindow(page: number, count: number): (number | "gap")[] {
+  if (count <= 7)
+    return Array.from({ length: count }, (_, i) => i + 1);
+  const out: (number | "gap")[] = [1];
+  const from = Math.max(2, page - 1);
+  const to = Math.min(count - 1, page + 1);
+  if (from > 2) out.push("gap");
+  for (let i = from; i <= to; i++) out.push(i);
+  if (to < count - 1) out.push("gap");
+  out.push(count);
+  return out;
+}
+
+function Pagination({
+  page,
+  pageCount,
+  onGo,
+}: {
+  page: number;
+  pageCount: number;
+  onGo: (p: number) => void;
+}) {
+  const btn =
+    "grid h-9 min-w-9 place-items-center rounded-[6px] px-2.5 text-[13px] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-40";
+  return (
+    <nav
+      aria-label="Pagination"
+      className="flex items-center justify-center gap-1 border-t border-line/30 px-4 py-3"
+    >
+      <button
+        type="button"
+        aria-label="Previous page"
+        onClick={() => onGo(page - 1)}
+        disabled={page === 1}
+        className={cn(btn, "text-ink-soft hover:bg-white/[0.06] hover:text-ink")}
+      >
+        <ChevronLeft className="size-4" />
+      </button>
+
+      {pageWindow(page, pageCount).map((p, i) =>
+        p === "gap" ? (
+          <span key={`gap-${i}`} className="px-1 text-ink-faint">
+            …
+          </span>
+        ) : (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onGo(p)}
+            aria-current={p === page ? "page" : undefined}
+            className={cn(
+              btn,
+              p === page
+                ? "bg-brand text-white"
+                : "text-ink-soft hover:bg-white/[0.06] hover:text-ink",
+            )}
+          >
+            {p}
+          </button>
+        ),
+      )}
+
+      <button
+        type="button"
+        aria-label="Next page"
+        onClick={() => onGo(page + 1)}
+        disabled={page === pageCount}
+        className={cn(btn, "text-ink-soft hover:bg-white/[0.06] hover:text-ink")}
+      >
+        <ChevronRight className="size-4" />
+      </button>
+    </nav>
   );
 }
 
@@ -223,6 +321,7 @@ export function GameHistory() {
   const [query, setQuery] = React.useState("");
   const [searching, setSearching] = React.useState(false);
   const [newestFirst, setNewestFirst] = React.useState(true);
+  const [page, setPage] = React.useState(1);
 
   const me = profile?.username ?? "";
 
@@ -246,13 +345,27 @@ export function GameHistory() {
     return newestFirst ? list : [...list].reverse();
   }, [games, tab, query, newestFirst]);
 
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+  const shown = filtered.slice(
+    (current - 1) * PAGE_SIZE,
+    current * PAGE_SIZE,
+  );
+
+  // Any change to what's being listed puts you back at the top of it.
+  React.useEffect(() => setPage(1), [tab, query, newestFirst]);
+
   const loading = status === "loading";
 
   return (
     <div className="mx-auto w-full max-w-[1084px]">
       {/* Header */}
       <div className="flex items-center gap-3.5 px-4 pb-5 pt-4">
-        <Image src={GAME_ICON.games} width={40} height={40} alt="" />
+        {profile?.avatar ? (
+          <Avatar size={40} rounded="md" src={profile.avatar} alt="" />
+        ) : (
+          <Image src={GAME_ICON.games} width={40} height={40} alt="" />
+        )}
         <h1 className="truncate font-display text-[27px] font-black text-white/90">
           {me ? `${me}'s Game History` : "Game History"}
         </h1>
@@ -324,7 +437,7 @@ export function GameHistory() {
 
         {/* Rows */}
         <div>
-          {filtered.map((g) => (
+          {shown.map((g) => (
             <GameRow
               key={g.id}
               game={g}
@@ -348,6 +461,10 @@ export function GameHistory() {
             </p>
           )}
         </div>
+
+        {pageCount > 1 && (
+          <Pagination page={current} pageCount={pageCount} onGo={setPage} />
+        )}
 
         {loading && progress.total > 0 && (
           <p className="border-t border-line/30 px-4 py-3 text-center text-[13px] text-ink-soft">

@@ -1,6 +1,7 @@
+import * as React from "react";
 import type { Metadata } from "next";
 import { AppShell } from "@/components/layout/app-shell";
-import { GameReview } from "@/features/game-based-puzzles/game-review";
+import { ArchivedReview } from "@/features/games/archived-review";
 
 export const metadata: Metadata = {
   title: "Game Review — Chess.com",
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function ReviewPage() {
   return (
     <AppShell fullBleed>
-      <GameReview />
+      {/* useSearchParams needs a boundary so the shell can still prerender. */}
+      <React.Suspense fallback={null}>
+        <ArchivedReview />
+      </React.Suspense>
     </AppShell>
   );
 }

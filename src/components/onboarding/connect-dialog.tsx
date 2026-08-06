@@ -42,7 +42,7 @@ function PieceLoader() {
  * one Chess.com username, so it is asked for once, up front, and remembered.
  */
 export function ConnectDialog() {
-  const { profile, status, error, progress, ready, restored, connect } =
+  const { profile, status, error, progress, ready, restored, promptNonce, connect } =
     useChessAccount();
   const [value, setValue] = React.useState("");
   const [dismissed, setDismissed] = React.useState(false);
@@ -56,6 +56,14 @@ export function ConnectDialog() {
   React.useEffect(() => {
     if (open && !loading) inputRef.current?.focus();
   }, [open, loading]);
+
+  // Logging out asks again, even if the prompt was waved away earlier.
+  React.useEffect(() => {
+    if (promptNonce > 0) {
+      setDismissed(false);
+      setValue("");
+    }
+  }, [promptNonce]);
 
   // A finished load closes the dialog on its own.
   React.useEffect(() => {

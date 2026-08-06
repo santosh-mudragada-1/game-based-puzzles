@@ -17,15 +17,14 @@ import { ReviewBottomBar } from "@/components/review/review-bottom-bar";
 import {
   reviewModel,
   gamePuzzles,
-  notablePlies,
+  notablePliesOf,
   suggestBestMove,
   type ReviewPly,
+  type ReviewModel,
 } from "@/lib/pgn";
 import type { MoveClassification, PieceColor } from "@/types";
 import { cn } from "@/lib/utils";
 
-const model = reviewModel;
-const N = model.plies.length;
 const PUZZLE_COUNT = gamePuzzles.length;
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -198,7 +197,16 @@ function PanelHeader({
   );
 }
 
-export function GameReview() {
+export function GameReview({
+  model = reviewModel,
+  /** Shown while a game pulled off Chess.com is still being analysed. */
+  analysing,
+}: {
+  model?: ReviewModel;
+  analysing?: { done: number; total: number } | null;
+} = {}) {
+  const N = model.plies.length;
+  const notablePlies = React.useMemo(() => notablePliesOf(model), [model]);
   const [currentPly, setCurrentPly] = React.useState(0);
   const [playing, setPlaying] = React.useState(false);
   // When set, autoplay stops once this ply is reached ("play to next important").
@@ -443,6 +451,28 @@ export function GameReview() {
       {/* RIGHT — overview / review panel */}
       <aside className="flex w-full shrink-0 flex-col border-t border-line/60 bg-surface lg:h-screen lg:w-[500px] lg:border-l lg:border-t-0">
         <PanelHeader showBack={!isOverview} onBack={() => seek(0)} />
+
+        {/* Live analysis of an archived game — the numbers sharpen as it runs. */}
+        {analysing && analysing.done < analysing.total && (
+          <div className="shrink-0 border-b border-line/40 bg-black/[0.14] px-6 py-3">
+            <div className="flex items-baseline justify-between text-[13px]">
+              <span className="text-ink-soft">
+                Analysing with Stockfish…
+              </span>
+              <span className="font-semibold tabular-nums text-ink">
+                {analysing.done}/{analysing.total}
+              </span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-brand transition-[width] duration-300"
+                style={{
+                  width: `${Math.round((analysing.done / Math.max(1, analysing.total)) * 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {isOverview ? (
           <>

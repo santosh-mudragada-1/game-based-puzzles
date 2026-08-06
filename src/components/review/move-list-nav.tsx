@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
-import { notablePlySet, type ReviewModel, type ReviewPly } from "@/lib/pgn";
+import { computeNotable, type ReviewModel, type ReviewPly } from "@/lib/pgn";
 import { moveTypeIcon, MOVE_COLOR, MOVE_LABEL } from "@/lib/assets";
 import { SanText } from "@/components/puzzles/san-text";
 import { cn } from "@/lib/utils";
@@ -12,10 +12,13 @@ function MoveCell({
   currentPly,
   onSeek,
   currentRef,
+  notable: notablePlySet,
 }: {
   ply?: ReviewPly;
   currentPly: number;
   onSeek: (ply: number) => void;
+  /** Plies worth badging, for this model. */
+  notable: Set<number>;
   currentRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   if (!ply) return <span aria-hidden="true" />;
@@ -79,6 +82,7 @@ export function MoveListNav({
 }) {
   const currentRef = React.useRef<HTMLButtonElement>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
+  const notable = React.useMemo(() => computeNotable(model), [model]);
 
   // Keep the active move in view within the list only — never scroll ancestors.
   React.useEffect(() => {
@@ -122,12 +126,14 @@ export function MoveListNav({
             currentPly={currentPly}
             onSeek={onSeek}
             currentRef={currentRef}
+            notable={notable}
           />
           <MoveCell
             ply={row.black}
             currentPly={currentPly}
             onSeek={onSeek}
             currentRef={currentRef}
+            notable={notable}
           />
         </div>
       ))}

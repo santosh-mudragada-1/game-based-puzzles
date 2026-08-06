@@ -14,6 +14,7 @@ import {
 import { Logo } from "@/components/shared/logo";
 import { Avatar } from "@/components/shared/avatar";
 import { PlanSwitcher } from "@/components/shared/plan-switcher";
+import { AccountMenu } from "@/components/shared/account-menu";
 import { NAV_ICON, GAME_ICON, ICON } from "@/lib/assets";
 import { currentUser } from "@/data";
 import { usePlan } from "@/hooks/use-plan";
@@ -315,16 +316,7 @@ export function Sidebar({
           <span className="text-sm font-medium">Search</span>
         </button>
 
-        <button
-          type="button"
-          className="flex w-full items-center gap-2.5 rounded-[6px] px-2 py-1.5 transition-colors hover:bg-white/[0.04]"
-        >
-          <Avatar size={30} alt={currentUser.displayName} />
-          <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-ink">
-            {currentUser.displayName}
-          </span>
-          <ChevronDown className="size-4 text-ink-soft" />
-        </button>
+        <AccountMenu onNavigate={onNavigate} />
 
         <div className="mt-1 flex items-center justify-between px-1">
           <FooterIcon icon={Users2} label="Friends" />
