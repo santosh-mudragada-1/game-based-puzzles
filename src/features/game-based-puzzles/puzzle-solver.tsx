@@ -410,14 +410,16 @@ function PuzzleBrief({
                 </p>
               </div>
             </div>
-            <p
-              className="mt-3 text-[12px] leading-[16.5px]"
-              style={{ color: MUTED }}
-            >
-              {replaying
-                ? "Replaying it on the board…"
-                : "The board rewound to just before it. The crossed-out piece marks where it went — that square is the mistake."}
-            </p>
+            {/* Only while the mistake is playing itself out — once it has, the
+                crossed-out piece on the board says it without a caption. */}
+            {replaying && (
+              <p
+                className="mt-3 text-[12px] leading-[16.5px]"
+                style={{ color: MUTED }}
+              >
+                Replaying it on the board…
+              </p>
+            )}
           </div>
         </>
       )}
