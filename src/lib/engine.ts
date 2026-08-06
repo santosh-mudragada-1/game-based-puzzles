@@ -58,6 +58,20 @@ function parseInfo(line: string, sign: number): Partial<EngineEval> | null {
 type LineHandler = (line: string) => void;
 
 /**
+ * Thrown by `analyse` when a newer request (or `cancel`) took the worker over.
+ *
+ * A superseded search has no score to give — it must not resolve, because a
+ * resolved promise reads as "the engine has spoken" and would publish an empty
+ * 0.0 for a position it never actually looked at.
+ */
+export class EngineCancelled extends Error {
+  constructor() {
+    super("engine: search superseded");
+    this.name = "EngineCancelled";
+  }
+}
+
+/**
  * One shared Stockfish worker for the whole app.
  *
  * Only a single search runs at a time: starting a new one stops whatever is in
@@ -159,22 +173,25 @@ class StockfishEngine {
       const sign = fenSideToMove(fen) === userSide ? 1 : -1;
 
       let latest: EngineEval = { ...EMPTY_EVAL };
+      /** Whether any score at all came back for this position. */
+      let scored = false;
 
       const done = new Promise<void>((resolve) => {
         const h: LineHandler = (line) => {
-          // A newer request took over — stop feeding this one.
-          if (this.token !== mine) {
-            this.handlers.delete(h);
-            resolve();
-            return;
-          }
           if (line.startsWith("info ")) {
+            // A newer request took over — stop collecting, but stay installed.
+            if (this.token !== mine) return;
             const parsed = parseInfo(line, sign);
             if (parsed) {
+              scored = true;
               latest = { ...latest, ...parsed };
               onUpdate?.(latest);
             }
           } else if (line.startsWith("bestmove")) {
+            // Always consume our *own* terminator, superseded or not. Bailing
+            // out early leaves this `bestmove` ownerless, and because searches
+            // are chained it lands on the next one instead — ending it before
+            // it has scored, so that position never gets an evaluation at all.
             const mv = line.split(/\s+/)[1];
             latest = {
               ...latest,
@@ -192,6 +209,10 @@ class StockfishEngine {
       this.searching = true;
       this.send(`go depth ${depth}`);
       await done;
+      // Superseded mid-flight, or stopped before a single score landed. Note
+      // `depth` is *not* a usable test: a position that is already checkmate is
+      // reported as `depth 0 score mate 0`, which is a real answer.
+      if (this.token !== mine || !scored) throw new EngineCancelled();
       onUpdate?.(latest);
       return latest;
     };

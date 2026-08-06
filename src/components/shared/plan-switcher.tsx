@@ -109,30 +109,28 @@ export function PlanSwitcher({ onNavigate }: { onNavigate?: () => void }) {
         )}
       </AnimatePresence>
 
+      {/* A compact round control rather than a full nav row — it isn't part of
+          the product, so it shouldn't read like one of the real rail items. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Preview as ${premium ? "Premium" : "Free"} — switch plan`}
-        title="Prototype: switch plan"
+        title={`Prototype: previewing the ${premium ? "Premium" : "Free"} plan`}
         className={cn(
-          "flex w-full items-center gap-2.5 rounded-[6px] px-2.5 py-2 text-left transition-colors",
+          "grid size-9 place-items-center rounded-full border border-line/70 bg-surface-sunken/90 shadow-card transition",
+          "hover:brightness-125 active:translate-y-px",
           open
-            ? "bg-white/[0.06] text-ink"
-            : "text-ink-soft hover:bg-white/[0.04] hover:text-ink",
+            ? "text-ink opacity-100"
+            : "text-ink-soft opacity-60 hover:opacity-100",
         )}
       >
-        <span className="grid size-[18px] shrink-0 place-items-center">
-          {premium ? (
-            <Image src={ICON.upgrade} width={18} height={18} alt="" />
-          ) : (
-            <FlaskConical className="size-[17px]" strokeWidth={2.25} />
-          )}
-        </span>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-          {premium ? "Premium Plan" : "Free Plan"}
-        </span>
+        {premium ? (
+          <Image src={ICON.upgrade} width={16} height={16} alt="" />
+        ) : (
+          <FlaskConical className="size-[15px]" strokeWidth={2.25} />
+        )}
       </button>
     </div>
   );

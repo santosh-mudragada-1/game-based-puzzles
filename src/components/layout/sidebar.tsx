@@ -303,7 +303,7 @@ export function Sidebar({
       {/* Bottom cluster */}
       <div className="px-2 pb-3">
         {/* Prototype-only: preview the Free or Premium experience. */}
-        <div className="mb-1">
+        <div className="mb-2 px-1.5">
           <PlanSwitcher onNavigate={onNavigate} />
         </div>
 

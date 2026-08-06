@@ -1,5 +1,4 @@
 import type {
-  MoveClassification,
   PuzzleCategory,
   PuzzleCategoryStat,
   SolvePuzzle,
@@ -17,14 +16,20 @@ export const CATEGORY_LABEL: Record<PuzzleCategory, string> = {
   "opening-mistake": "Opening mistake",
 };
 
-/** The move-classification art (public/move-types) that best fits each theme. */
-export const CATEGORY_MOVE_ICON: Record<PuzzleCategory, MoveClassification> = {
-  blunder: "blunder",
-  mistake: "mistake",
-  "missed-opportunity": "missed",
-  "lost-advantage": "blunder",
-  "critical-moment": "mistake",
-  "opening-mistake": "inaccuracy",
+/**
+ * Badge art per theme, from public/move-types.
+ *
+ * Four reuse Chess.com's move-classification art; "Lost advantage" and
+ * "Critical moment" have their own, so no two themes share a badge and the list
+ * can be read at a glance.
+ */
+export const CATEGORY_ICON: Record<PuzzleCategory, string> = {
+  blunder: "/move-types/blunder.png",
+  mistake: "/move-types/mistake.png",
+  "missed-opportunity": "/move-types/missed.png",
+  "lost-advantage": "/move-types/lost-advantage.png",
+  "critical-moment": "/move-types/critical-moment.png",
+  "opening-mistake": "/move-types/book.png",
 };
 
 /**

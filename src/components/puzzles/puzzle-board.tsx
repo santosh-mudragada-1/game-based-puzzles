@@ -34,6 +34,12 @@ interface PuzzleBoardProps {
   /** Teal ring on the piece(s) to move (the "Hint" reveal). */
   hint?: string[];
   arrows?: BoardArrow[];
+  /**
+   * A faded piece struck through on the square a *rejected* move led to — the
+   * played mistake. A solid arrow alone reads as "play this"; a greyed-out piece
+   * under a cross reads as "this already happened, and it was wrong".
+   */
+  ghost?: { square: string; piece: string } | null;
   /** Increment to trigger a "wrong move" shake. */
   shakeSignal?: number;
   /** The move that produced this position — its piece slides into place. */
@@ -42,8 +48,13 @@ interface PuzzleBoardProps {
   className?: string;
 }
 
+/**
+ * Red for the move that was played, teal for the move to find. Red reads as
+ * "this was wrong" where the old orange read as a suggestion — testers were
+ * playing the arrow instead of improving on it.
+ */
 const ARROW_COLOR: Record<BoardArrow["tone"], string> = {
-  orange: "#f0810f",
+  orange: "#d0453f",
   teal: "#26c2a3",
 };
 
@@ -84,6 +95,7 @@ export function PuzzleBoard({
   dangerSquare,
   hint = [],
   arrows = [],
+  ghost = null,
   shakeSignal = 0,
   lastMove = null,
   showCoordinates = true,
@@ -211,6 +223,38 @@ export function PuzzleBoard({
             )}
             {hintSet.has(cell.square) && (
               <div className="absolute inset-[7%] rounded-full ring-[3px] ring-[#26c2a3]" />
+            )}
+
+            {ghost?.square === cell.square && (
+              <motion.div
+                className="pointer-events-none absolute inset-0 z-[2]"
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <Image
+                  src={pieceImage(ghost.piece)}
+                  alt=""
+                  fill
+                  sizes="(max-width: 640px) 12vw, 64px"
+                  // A white ghost on a cream square needs the shadow to read at
+                  // all; the grayscale keeps it from looking like a live piece.
+                  className="object-contain p-[5%] opacity-55 grayscale drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                />
+                {/* The cross, drawn over the piece so it reads at any size. */}
+                <svg
+                  viewBox="0 0 100 100"
+                  className="absolute inset-0 size-full"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M30 30 L70 70 M70 30 L30 70"
+                    stroke="#d0453f"
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </motion.div>
             )}
 
             {cell.piece && (

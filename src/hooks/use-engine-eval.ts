@@ -1,7 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { getEngine, EMPTY_EVAL, type EngineEval } from "@/lib/engine";
+import {
+  getEngine,
+  EngineCancelled,
+  EMPTY_EVAL,
+  type EngineEval,
+} from "@/lib/engine";
 import type { PieceColor } from "@/types";
 
 export interface EngineEvalState extends EngineEval {
@@ -77,7 +82,10 @@ export function useEngineEval(
       .then((e) => {
         if (live) setState({ ...e, settled: true, failed: false });
       })
-      .catch(() => {
+      .catch((err) => {
+        // A superseded search says nothing about this position — leave whatever
+        // is on screen alone rather than reporting a 0.0 nobody searched for.
+        if (err instanceof EngineCancelled) return;
         if (live)
           setState({
             ...EMPTY_EVAL,
@@ -90,11 +98,19 @@ export function useEngineEval(
 
     return () => {
       live = false;
-      // Leaving the position (or the page) stops the search — otherwise the
-      // worker carries on burning CPU on a board nobody is looking at.
-      getEngine().cancel();
     };
   }, [fen, userSide, depth, enabled]);
+
+  // Stop the worker when the screen goes away — otherwise it carries on burning
+  // CPU on a board nobody is looking at.
+  //
+  // Deliberately *not* done when the position changes: the next `analyse`
+  // already supersedes the previous search, and this hook runs twice on the
+  // page (the peak and the live bar) against one shared worker — so cancelling
+  // on every scrub also aborted the other hook's search, which then never
+  // restarted because its own position hadn't changed. That is what left the
+  // bar frozen on a stale number while stepping through a line.
+  React.useEffect(() => () => getEngine().cancel(), []);
 
   return state;
 }

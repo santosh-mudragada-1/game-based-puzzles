@@ -22,6 +22,17 @@ export function pieceColorAt(fen: string, square: string): PieceColor | null {
   }
 }
 
+/** FEN letter of the piece on a square (uppercase = white), or null if empty. */
+export function pieceAt(fen: string, square: string): string | null {
+  try {
+    const g = new Chess(fen);
+    const p = g.get(square as Square);
+    return p ? (p.color === "w" ? p.type.toUpperCase() : p.type) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The position after playing a move, or null when it isn't legal in `fen`. */
 export function fenAfterMove(
   fen: string,

@@ -27,7 +27,7 @@ import { CoachBubble } from "@/components/review/coach-bubble";
 import { Confetti } from "@/components/shared/confetti";
 import { PuzzleBoard, type BoardArrow } from "@/components/puzzles/puzzle-board";
 import { PuzzleEvalBar } from "@/components/puzzles/puzzle-eval-bar";
-import { GAME_ICON, moveTypeIcon } from "@/lib/assets";
+import { GAME_ICON } from "@/lib/assets";
 import { currentUser } from "@/data";
 import {
   solvePuzzles,
@@ -35,7 +35,7 @@ import {
   puzzleProgress,
   coachIntro,
   CATEGORY_LABEL,
-  CATEGORY_MOVE_ICON,
+  CATEGORY_ICON,
   FREE_DAILY_LIMIT,
 } from "@/data/solve-puzzles";
 import { usePlan } from "@/hooks/use-plan";
@@ -53,8 +53,14 @@ const UpgradeTransition = dynamic(
     ),
   { ssr: false },
 );
-import { checkedKingSquare, evalLabel, fenAfterMove } from "@/lib/puzzle";
+import {
+  checkedKingSquare,
+  evalLabel,
+  fenAfterMove,
+  pieceAt,
+} from "@/lib/puzzle";
 import { useEngineEval } from "@/hooks/use-engine-eval";
+import { MATE_CP } from "@/lib/engine";
 import type {
   PieceColor,
   PlayerRef,
@@ -164,6 +170,255 @@ function ProgressRow({ completed, total }: { completed: number; total: number })
   );
 }
 
+/**
+ * The brief that fills the panel while a puzzle is unsolved.
+ *
+ * Testers were reading the arrow as an instruction and replaying the losing
+ * move, so the two halves are stated separately and in order: what already
+ * happened (past tense, red, with the evaluation it cost), then what to do now
+ * (present tense, green). Once the solver is into the line the green half turns
+ * into an acknowledgement — otherwise a multi-move puzzle gives no sign that the
+ * first move landed until the whole thing is done.
+ */
+function MistakeBrief({
+  san,
+  wasLabel,
+  nowLabel,
+  replaying,
+  progress,
+}: {
+  san: string;
+  wasLabel: string;
+  nowLabel: string;
+  /** The mistake is replaying itself on the board right now. */
+  replaying: boolean;
+  /** Set once the solver is into the line — how far, and what they just found. */
+  progress: { san: string; done: number; total: number } | null;
+}) {
+  return (
+    <div className="px-5 py-5">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+        What happened in your game
+      </p>
+
+      <div className="mt-2.5 rounded-[10px] border border-[#d0453f]/35 bg-[#d0453f]/[0.09] p-3.5">
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[12px] leading-none text-ink-soft">You played</p>
+            <p className="mt-1.5 font-display text-[19px] font-black leading-none text-white line-through decoration-[#e0625c]/70 decoration-2">
+              {san}
+            </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-[10px] uppercase leading-none tracking-wide text-ink-faint">
+              Evaluation
+            </p>
+            <p className="mt-1.5 text-[14px] font-bold leading-none tabular-nums">
+              <span className="text-ink-soft">{wasLabel}</span>
+              <span className="mx-1 text-ink-faint">→</span>
+              <span className="text-[#e0625c]">{nowLabel}</span>
+            </p>
+          </div>
+        </div>
+        <p className="mt-3 text-[12px] leading-snug text-ink-soft">
+          {replaying
+            ? "Replaying it on the board…"
+            : "The board rewound to just before it. The crossed-out piece marks where it went — that square is the mistake."}
+        </p>
+      </div>
+
+      <div className="mt-2.5 rounded-[10px] border border-brand/30 bg-brand/[0.09] p-3.5">
+        {progress ? (
+          <>
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-[13px] font-bold leading-none text-brand">
+                Right direction
+              </p>
+              <p className="text-[11px] font-semibold leading-none tabular-nums text-ink-soft">
+                {progress.done} of {progress.total}
+              </p>
+            </div>
+            <p className="mt-2 text-[13px] leading-snug text-ink-muted">
+              <span className="font-display font-black text-white">
+                {progress.san}
+              </span>{" "}
+              was the move you missed. Keep the line going.
+            </p>
+            {/* One notch per move in the solution. */}
+            <div className="mt-2.5 flex gap-1">
+              {Array.from({ length: progress.total }).map((_, i) => (
+                <span
+                  key={i}
+                  className={cn(
+                    "h-[3px] flex-1 rounded-full transition-colors",
+                    i < progress.done ? "bg-brand" : "bg-white/10",
+                  )}
+                />
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-[13px] font-bold leading-none text-white">
+              Your turn
+            </p>
+            <p className="mt-2 text-[13px] leading-snug text-ink-muted">
+              Play the move you{" "}
+              <em className="not-italic font-semibold text-white">
+                should have
+              </em>{" "}
+              found instead.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Sparks drifting up out of the solved card — the "clean" flourish. */
+function Sparks() {
+  const seeds = [8, 24, 41, 57, 72, 88];
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      {seeds.map((left, i) => (
+        <motion.span
+          key={left}
+          className="absolute bottom-2 block size-1.5 rounded-[1px] bg-brand"
+          style={{ left: `${left}%` }}
+          initial={{ opacity: 0 }}
+          animate={{ y: [0, -54], opacity: [0, 0.9, 0], rotate: [0, 180] }}
+          transition={{
+            duration: 2.4,
+            repeat: Infinity,
+            delay: i * 0.38,
+            ease: "easeOut",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * What the two briefing cards become once the puzzle is put right.
+ *
+ * The panel used to empty out at exactly the moment worth celebrating, and with
+ * it went the record of what the puzzle was even about. This keeps both halves
+ * on screen — the mistake, now settled, and the correction — and grades the
+ * solve, because "found it cold" and "needed the answer" should not feel the
+ * same.
+ */
+function SolvedCard({
+  kind,
+  playedSan,
+  foundSan,
+  fromLabel,
+  toLabel,
+}: {
+  kind: Outcome;
+  playedSan: string;
+  foundSan: string;
+  /** Evaluation the mistake left behind, and where the solution takes it. */
+  fromLabel: string;
+  toLabel: string;
+}) {
+  const clean = kind === "solved-clean";
+  const failed = kind === "failed";
+  const headline = clean
+    ? "Solved clean"
+    : failed
+      ? "Solution revealed"
+      : "Solved with help";
+  const blurb = clean
+    ? "First try, no hints — you found the move you missed in the game."
+    : failed
+      ? "Worth replaying this one from memory once the queue is done."
+      : "You got there. Try it again later without the hint to make it stick.";
+  const tone = clean
+    ? { ring: "border-brand/45", bg: "bg-brand/[0.11]", text: "text-brand" }
+    : failed
+      ? { ring: "border-line/70", bg: "bg-white/[0.04]", text: "text-ink-soft" }
+      : { ring: "border-[#e0a33f]/40", bg: "bg-[#e0a33f]/[0.09]", text: "text-[#e8b45c]" };
+
+  return (
+    <div className="px-5 py-5">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+        What happened in your game
+      </p>
+
+      {/* The mistake, settled — muted now that it has been answered. */}
+      <motion.div
+        className="mt-2.5 flex items-center justify-between gap-3 rounded-[10px] border border-line/60 bg-white/[0.03] px-3.5 py-3"
+        initial={{ opacity: 1 }}
+        animate={{ opacity: 0.75 }}
+        transition={{ duration: 0.5, delay: 0.35 }}
+      >
+        <p className="text-[12px] text-ink-soft">
+          You played{" "}
+          <span className="font-display text-[15px] font-black text-ink-muted line-through decoration-[#e0625c]/60 decoration-2">
+            {playedSan}
+          </span>
+        </p>
+        <p className="text-[13px] font-bold tabular-nums text-ink-faint">
+          {fromLabel}
+        </p>
+      </motion.div>
+
+      {/* The correction — the card that gets the celebration. */}
+      <motion.div
+        className={cn(
+          "relative mt-2.5 overflow-hidden rounded-[10px] border p-4",
+          tone.ring,
+          tone.bg,
+        )}
+        initial={{ opacity: 0, y: 10, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: "spring", stiffness: 420, damping: 26 }}
+      >
+        {clean && <Sparks />}
+        {/* A single shine sweeping across on arrival. */}
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/[0.14] to-transparent"
+          initial={{ x: "-140%" }}
+          animate={{ x: "420%" }}
+          transition={{ duration: 1.1, delay: 0.25, ease: "easeInOut" }}
+        />
+
+        <div className="relative flex items-baseline justify-between gap-3">
+          <motion.p
+            className={cn("font-display text-[20px] font-black leading-none", tone.text)}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12, duration: 0.3 }}
+          >
+            {headline}
+          </motion.p>
+          <p className="text-[13px] font-bold leading-none tabular-nums">
+            <span className="text-ink-faint">{fromLabel}</span>
+            <span className="mx-1.5 text-ink-faint">→</span>
+            <span className={tone.text}>{toLabel}</span>
+          </p>
+        </div>
+
+        <motion.p
+          className="relative mt-2.5 text-[13px] leading-snug text-ink-muted"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.28, duration: 0.35 }}
+        >
+          The move was{" "}
+          <span className="font-display text-[15px] font-black text-white">
+            {foundSan}
+          </span>
+          . {blurb}
+        </motion.p>
+      </motion.div>
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------- Start view */
 
 /** A single figure in the "where you got to" strip on the start screen. */
@@ -243,7 +498,7 @@ function StartView({
               className="group flex w-full items-center gap-3 rounded-[8px] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.06]"
             >
               <Image
-                src={moveTypeIcon(CATEGORY_MOVE_ICON[c.category])}
+                src={CATEGORY_ICON[c.category]}
                 width={22}
                 height={22}
                 alt=""
@@ -283,7 +538,7 @@ function ClassificationTag({ puzzle }: { puzzle: SolvePuzzle }) {
   return (
     <div className="flex items-center gap-2 rounded-[8px] bg-black/20 p-3">
       <Image
-        src={moveTypeIcon(CATEGORY_MOVE_ICON[puzzle.category])}
+        src={CATEGORY_ICON[puzzle.category]}
         width={22}
         height={22}
         alt=""
@@ -392,6 +647,13 @@ export function PuzzleSolver() {
 
   const authoredPeak = React.useMemo(() => {
     if (!line.length) return { cp: 0, mate: null as number | null };
+    // A mating line's plies are scored *after* each move, so the last one reads
+    // "mate 0" — delivered. From the position the solver is looking at the mate
+    // is still N of their own moves away, and labelling it "1-0" before they've
+    // played it claims the game is already over.
+    const mateIdx = line.findIndex((p) => p.isMate);
+    if (mateIdx >= 0)
+      return { cp: MATE_CP, mate: Math.ceil((mateIdx + 1) / 2) as number | null };
     let best = line[0];
     for (const p of line) if (p.cp > best.cp) best = p;
     return { cp: best.cp, mate: best.mate };
@@ -406,10 +668,17 @@ export function PuzzleSolver() {
   // At the start the bar reads the position the played move led to (the board
   // still shows the moment before it, with the orange arrow); after that it
   // follows the line as it's solved.
-  const barFen = vp === 0 ? playedFen : line[vp - 1].fen;
+  //
+  // Once the puzzle is solved the mistake is no longer part of the line, so
+  // stepping back to the start shows the position as it stood — not the wreck
+  // the played move made of it. Otherwise scrubbing back would re-open the gap
+  // and replay the red "you threw it away" band on a puzzle already put right.
+  const barFen = vp === 0 ? (solved ? puzzle?.fen ?? null : playedFen) : line[vp - 1].fen;
   const authoredCurrent =
     vp === 0
-      ? { cp: puzzle?.start.cp ?? 0, mate: puzzle?.start.mate ?? null }
+      ? solved
+        ? authoredPeak
+        : { cp: puzzle?.start.cp ?? 0, mate: puzzle?.start.mate ?? null }
       : { cp: line[vp - 1].cp, mate: line[vp - 1].mate };
   const barEval = useEngineEval(barFen, userSide, {
     enabled: view === "run" && puzzle != null,
@@ -417,12 +686,19 @@ export function PuzzleSolver() {
     resetKey: puzzle?.id,
   });
 
+  // The hook holds the *previous* ply's score while the next one is searched,
+  // which past the first move means the bar briefly shows the pre-move number
+  // against the new peak — a red gap flashing open on the very move that closed
+  // it. The authored (engine-verified) score for the ply stands in until the
+  // live search lands.
+  const barSettled = barEval.settled || barEval.failed;
+  const shownCp = vp === 0 || barSettled ? barEval.cp : authoredCurrent.cp;
+  const shownMate = vp === 0 || barSettled ? barEval.mate : authoredCurrent.mate;
+
   // The opening drop only plays once both numbers are real. Past the first move
   // the bar just tracks the line, so it never holds again mid-puzzle.
   const barReady =
-    vp > 0 ||
-    ((peakEval.settled || peakEval.failed) &&
-      (barEval.settled || barEval.failed));
+    vp > 0 || ((peakEval.settled || peakEval.failed) && barSettled);
 
   /**
    * How far into the queue this member may go. The counters still read against
@@ -477,6 +753,33 @@ export function PuzzleSolver() {
     },
     [],
   );
+
+  /**
+   * The mistake plays itself out once when a puzzle opens: the losing move
+   * slides onto the board, holds for a beat, then rewinds to the moment before
+   * it. Testers shown only a red arrow read it as an instruction and replayed
+   * the blunder — watching the move happen *and be taken back* makes it
+   * unmistakably history, and leaves the board on "your turn".
+   */
+  const [replay, setReplay] = React.useState<"before" | "forward" | "back" | "done">(
+    "done",
+  );
+  React.useEffect(() => {
+    // Only the untouched start of an unsolved puzzle has a mistake to replay.
+    if (view !== "run" || !puzzle || solved || reachedPly !== 0) {
+      setReplay("done");
+      return;
+    }
+    setReplay("before");
+    const t = [
+      setTimeout(() => setReplay("forward"), 450),
+      setTimeout(() => setReplay("back"), 1550),
+      setTimeout(() => setReplay("done"), 2050),
+    ];
+    return () => t.forEach(clearTimeout);
+    // Deliberately not keyed on `wrong` — a failed attempt shouldn't rewind the
+    // board and make the solver watch the whole intro again.
+  }, [view, puzzle, solved, reachedPly]);
 
   // Advancing the live position clears the transient hint/wrong state.
   React.useEffect(() => {
@@ -716,11 +1019,25 @@ export function PuzzleSolver() {
   const arrows: BoardArrow[] = [];
   const hintSquares: string[] = [];
   let highlight: string[] = [];
+  let ghost: { square: string; piece: string } | null = null;
+  const replaying = replay !== "done";
   if (puzzle) {
     if (vp === 0) {
-      // The move actually played, as context (orange), on the starting position.
-      arrows.push({ from: puzzle.played.from, to: puzzle.played.to, tone: "orange" });
       highlight = [puzzle.played.from, puzzle.played.to];
+      if (!solved) {
+        // The move actually played, marked as rejected: a red arrow to a faded,
+        // crossed-out piece on the square it reached. Both land only after the
+        // replay has finished, so nothing competes with the move itself.
+        if (!replaying) {
+          arrows.push({
+            from: puzzle.played.from,
+            to: puzzle.played.to,
+            tone: "orange",
+          });
+          const moved = pieceAt(puzzle.fen, puzzle.played.from);
+          if (moved) ghost = { square: puzzle.played.to, piece: moved };
+        }
+      }
     } else if (vp > 0) {
       const last = line[vp - 1];
       highlight = [last.from, last.to];
@@ -739,7 +1056,48 @@ export function PuzzleSolver() {
         });
     }
   }
-  const dangerSquare = checkedKingSquare(currentFen);
+  // What the board is actually showing — the intro replay borrows it briefly.
+  const boardFen =
+    replay === "forward" && playedFen ? playedFen : currentFen;
+  const dangerSquare = checkedKingSquare(boardFen);
+
+  /**
+   * The "what you gave up" anchor belongs to the moment before the first move.
+   * Once the line is under way the bar just tracks it: a dip on move three is
+   * the line breathing (the opponent's reply, a quiet in-between move), not
+   * advantage being thrown away — and painting that red read as a fresh mistake.
+   */
+  const anchorPeak = vp === 0 && !solved;
+
+  const barLabel = evalLabel(shownCp, shownMate, shownMate === 0, userSide);
+  const peakLabel = evalLabel(
+    peakEval.cp,
+    peakEval.mate,
+    peakEval.mate === 0,
+    userSide,
+  );
+  // The brief describes the drop as it stood before the first move; the bar has
+  // moved on by the time the solver is into the line, so the number is pinned.
+  const dropLabel = React.useRef(barLabel);
+  if (vp === 0 && reachedPly === 0) dropLabel.current = barLabel;
+
+  /** Where the whole line lands — the payoff shown on the solved card. */
+  const lastPly = line[line.length - 1];
+  const finalLabel = lastPly
+    ? evalLabel(lastPly.cp, lastPly.mate, lastPly.mate === 0, userSide)
+    : barLabel;
+
+  /** How much of the solution the solver has found, for the "keep going" card. */
+  const userPlies = line.filter((p) => p.side === userSide);
+  const foundPlies = line.slice(0, reachedPly).filter((p) => p.side === userSide);
+  const lineProgress =
+    foundPlies.length > 0
+      ? {
+          san: foundPlies[foundPlies.length - 1].san,
+          done: foundPlies.length,
+          total: userPlies.length,
+        }
+      : null;
 
   const coachText = !puzzle
     ? coachIntro
@@ -779,21 +1137,11 @@ export function PuzzleSolver() {
             <div className="flex min-h-0 items-stretch justify-center gap-1.5 sm:gap-2">
               <PuzzleEvalBar
                 key={puzzle.id}
-                cp={barEval.cp}
-                label={evalLabel(
-                  barEval.cp,
-                  barEval.mate,
-                  barEval.mate === 0,
-                  userSide,
-                )}
-                peakCp={peakEval.cp}
-                peakLabel={evalLabel(
-                  peakEval.cp,
-                  peakEval.mate,
-                  peakEval.mate === 0,
-                  userSide,
-                )}
-                loop={!solved}
+                cp={shownCp}
+                label={evalLabel(shownCp, shownMate, shownMate === 0, userSide)}
+                peakCp={anchorPeak ? peakEval.cp : undefined}
+                peakLabel={anchorPeak ? peakLabel : undefined}
+                loop={anchorPeak}
                 step={`${puzzle.id}:${vp}`}
                 isUserMove={vp > 0 && line[vp - 1]?.side === userSide}
                 ready={barReady}
@@ -802,20 +1150,26 @@ export function PuzzleSolver() {
               <div className="aspect-square min-h-0 flex-1">
                 <PuzzleBoard
                   key={puzzle.id}
-                  fen={currentFen}
+                  fen={boardFen}
                   orientation={userSide}
                   playerSide={userSide}
-                  interactive={userTurn}
+                  interactive={userTurn && !replaying}
                   onMove={onMove}
                   highlight={highlight}
                   dangerSquare={dangerSquare}
                   hint={hintSquares}
                   arrows={arrows}
+                  ghost={ghost}
                   shakeSignal={shakeSignal}
                   lastMove={
-                    atLive && !solved && vp > 0
-                      ? { from: line[vp - 1].from, to: line[vp - 1].to }
-                      : null
+                    // During the intro the mistake slides on, then slides back.
+                    replay === "forward"
+                      ? { from: puzzle.played.from, to: puzzle.played.to }
+                      : replay === "back"
+                        ? { from: puzzle.played.to, to: puzzle.played.from }
+                        : atLive && !solved && vp > 0
+                          ? { from: line[vp - 1].from, to: line[vp - 1].to }
+                          : null
                   }
                   className="h-full w-full shadow-raised"
                 />
@@ -850,16 +1204,29 @@ export function PuzzleSolver() {
             <div className="shrink-0 space-y-3 border-b border-line/40 px-5 pb-4 pt-4">
               <CoachBubble text={coachText} />
               <ClassificationTag puzzle={puzzle} />
-              {vp === 0 && !solved && reachedPly === 0 && (
-                <p className="flex items-center gap-1.5 text-[12px] text-ink-faint">
-                  <span className="inline-block h-[3px] w-4 rounded-full bg-[#f0810f]" />
-                  The orange arrow is the move you played — find a stronger one.
-                </p>
-              )}
             </div>
 
-            {/* Spacer keeps the footer pinned to the bottom like the review panel */}
-            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin" />
+            {/* Fills the panel before the first move, then gets out of the way
+                so the footer sits where it always does. */}
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+              {solved ? (
+                <SolvedCard
+                  kind={outcomes[puzzle.id] ?? "solved-clean"}
+                  playedSan={puzzle.played.san}
+                  foundSan={line[0]?.san ?? ""}
+                  fromLabel={dropLabel.current}
+                  toLabel={finalLabel}
+                />
+              ) : (
+                <MistakeBrief
+                  san={puzzle.played.san}
+                  wasLabel={peakLabel}
+                  nowLabel={dropLabel.current}
+                  replaying={replaying}
+                  progress={lineProgress}
+                />
+              )}
+            </div>
 
             {/* Footer — progress, action buttons, nav */}
             <div className="shrink-0 space-y-3 border-t border-line/40 bg-black/[0.14] px-5 pb-4 pt-4">
@@ -1015,7 +1382,7 @@ export function PuzzleSolver() {
           }
           nextCategoryIcon={
             nextCategory
-              ? moveTypeIcon(CATEGORY_MOVE_ICON[nextCategory])
+              ? CATEGORY_ICON[nextCategory]
               : null
           }
           onSolveNextCategory={solveNextCategory}
