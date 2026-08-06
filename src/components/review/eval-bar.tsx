@@ -22,10 +22,32 @@ export function EvalBar({
   orientation = "white",
   className,
 }: EvalBarProps) {
-  const whitePct = Math.min(96, Math.max(4, 50 + (evalPawns / 8) * 50));
+  /**
+   * A forced mate — or a finished game — isn't an advantage to be measured, so
+   * the bar hands the whole thing to the winner instead of stopping at the 4%
+   * sliver an ordinary evaluation is clamped to.
+   */
+  const decidedForWhite = result
+    ? result.startsWith("1")
+    : mate != null
+      ? mate === 0
+        ? evalPawns > 0
+        : mate > 0
+      : null;
+
+  const whitePct =
+    decidedForWhite == null
+      ? Math.min(96, Math.max(4, 50 + (evalPawns / 8) * 50))
+      : decidedForWhite
+        ? 100
+        : 0;
   const blackPct = 100 - whitePct;
 
   const label = evalBarLabel(evalPawns, mate, result);
+  // The figure has to contrast with whatever ends up at the bottom, which a
+  // 100% fill can flip.
+  const bottomIsLight =
+    orientation === "white" ? whitePct > 6 : whitePct >= 100;
   // Blocks stack top -> bottom. For a White-oriented board White is on the
   // bottom; for a Black-oriented board the order flips.
   const whiteBlock = (
@@ -60,7 +82,7 @@ export function EvalBar({
       <span
         className={cn(
           "pointer-events-none absolute inset-x-0 bottom-[3px] text-center text-[10px] font-bold leading-none tabular-nums",
-          orientation === "white" ? "text-[#312e2b]" : "text-board-light",
+          bottomIsLight ? "text-[#312e2b]" : "text-board-light",
         )}
       >
         {label}
