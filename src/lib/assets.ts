@@ -78,4 +78,6 @@ export const ICON = {
   noAvatar: "/misc/no-avatar.gif",
   upgrade: "/misc/upgrade.svg",
   gameReview: "/misc/game-review.svg",
+  /** Magnifier-over-pie — game analysis, not a search box. */
+  analysis: "/misc/analysis.svg",
 };

@@ -27,7 +27,8 @@ import { CoachBubble } from "@/components/review/coach-bubble";
 import { Confetti } from "@/components/shared/confetti";
 import { PuzzleBoard, type BoardArrow } from "@/components/puzzles/puzzle-board";
 import { PuzzleEvalBar } from "@/components/puzzles/puzzle-eval-bar";
-import { GAME_ICON } from "@/lib/assets";
+import { SanText } from "@/components/puzzles/san-text";
+import { GAME_ICON, ICON } from "@/lib/assets";
 import { currentUser } from "@/data";
 import {
   solvePuzzles,
@@ -170,128 +171,105 @@ function ProgressRow({ completed, total }: { completed: number; total: number })
   );
 }
 
-/**
- * The brief that fills the panel while a puzzle is unsolved.
- *
- * Testers were reading the arrow as an instruction and replaying the losing
- * move, so the two halves are stated separately and in order: what already
- * happened (past tense, red, with the evaluation it cost), then what to do now
- * (present tense, green). Once the solver is into the line the green half turns
- * into an acknowledgement — otherwise a multi-move puzzle gives no sign that the
- * first move landed until the whole thing is done.
- */
-function MistakeBrief({
-  san,
-  wasLabel,
-  nowLabel,
-  replaying,
-  progress,
+/* ------------------------------------------------------- Solving panel cards */
+
+/** Figma: cards in the panel sit on a flat white 5% wash, no coloured tints. */
+const CARD = "rounded-[10px] bg-white/[0.05]";
+/** Figma greys — deliberately literal, they aren't in the token set. */
+const MUTED = "#a3a19e";
+const LABEL = "#9e9c99";
+const WRONG = "#e0625c";
+
+/** A 56px row: badge on the left, text after it. The panel's basic unit. */
+function PanelRow({
+  badge,
+  children,
+  className,
 }: {
-  san: string;
-  wasLabel: string;
-  nowLabel: string;
-  /** The mistake is replaying itself on the board right now. */
-  replaying: boolean;
-  /** Set once the solver is into the line — how far, and what they just found. */
-  progress: { san: string; done: number; total: number } | null;
+  badge: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="px-5 py-5">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-        What happened in your game
-      </p>
-
-      <div className="mt-2.5 rounded-[10px] border border-[#d0453f]/35 bg-[#d0453f]/[0.09] p-3.5">
-        <div className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[12px] leading-none text-ink-soft">You played</p>
-            <p className="mt-1.5 font-display text-[19px] font-black leading-none text-white line-through decoration-[#e0625c]/70 decoration-2">
-              {san}
-            </p>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="text-[10px] uppercase leading-none tracking-wide text-ink-faint">
-              Evaluation
-            </p>
-            <p className="mt-1.5 text-[14px] font-bold leading-none tabular-nums">
-              <span className="text-ink-soft">{wasLabel}</span>
-              <span className="mx-1 text-ink-faint">→</span>
-              <span className="text-[#e0625c]">{nowLabel}</span>
-            </p>
-          </div>
-        </div>
-        <p className="mt-3 text-[12px] leading-snug text-ink-soft">
-          {replaying
-            ? "Replaying it on the board…"
-            : "The board rewound to just before it. The crossed-out piece marks where it went — that square is the mistake."}
-        </p>
-      </div>
-
-      <div className="mt-2.5 rounded-[10px] border border-brand/30 bg-brand/[0.09] p-3.5">
-        {progress ? (
-          <>
-            <div className="flex items-baseline justify-between gap-3">
-              <p className="text-[13px] font-bold leading-none text-brand">
-                Right direction
-              </p>
-              <p className="text-[11px] font-semibold leading-none tabular-nums text-ink-soft">
-                {progress.done} of {progress.total}
-              </p>
-            </div>
-            <p className="mt-2 text-[13px] leading-snug text-ink-muted">
-              <span className="font-display font-black text-white">
-                {progress.san}
-              </span>{" "}
-              was the move you missed. Keep the line going.
-            </p>
-            {/* One notch per move in the solution. */}
-            <div className="mt-2.5 flex gap-1">
-              {Array.from({ length: progress.total }).map((_, i) => (
-                <span
-                  key={i}
-                  className={cn(
-                    "h-[3px] flex-1 rounded-full transition-colors",
-                    i < progress.done ? "bg-brand" : "bg-white/10",
-                  )}
-                />
-              ))}
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="text-[13px] font-bold leading-none text-white">
-              Your turn
-            </p>
-            <p className="mt-2 text-[13px] leading-snug text-ink-muted">
-              Play the move you{" "}
-              <em className="not-italic font-semibold text-white">
-                should have
-              </em>{" "}
-              found instead.
-            </p>
-          </>
-        )}
-      </div>
+    <div className={cn("flex h-14 items-center gap-2 px-4", CARD, className)}>
+      <span className="grid size-6 shrink-0 place-items-center">{badge}</span>
+      {children}
     </div>
   );
 }
 
-/** Sparks drifting up out of the solved card — the "clean" flourish. */
+/** The side-to-move swatch — a white or black square, as on a scoresheet. */
+function SideToMove({ side }: { side: PieceColor }) {
+  return (
+    <PanelRow
+      badge={
+        <span
+          className={cn(
+            "size-6 rounded-[3px] border-[1.8px] border-[#8b8987]",
+            side === "white" ? "bg-white" : "bg-[#312e2b]",
+          )}
+        />
+      }
+    >
+      <p className="text-[17px] font-bold tracking-[-0.43px] text-white">
+        {side === "white" ? "White" : "Black"} to move
+      </p>
+    </PanelRow>
+  );
+}
+
+/** Chess.com's tick — a thick check, drawn rather than pulled from lucide. */
+function Tick({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} aria-hidden="true">
+      <path
+        d="M14.13 5.31 6.58 12.86c-.49.49-.85.47-1.34 0L1.85 9.44c-.75-.75-.75-1.06 0-1.82l.06-.06c.76-.76 1.07-.76 1.82 0l2.2 2.2 6.31-6.33c.75-.75 1.07-.75 1.82 0l.07.06c.75.76.75 1.07 0 1.82Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/** "♜g7+ is correct!" — one row per move of the line the solver has found. */
+function CorrectMove({ san, color }: { san: string; color: PieceColor }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 480, damping: 30 }}
+    >
+      <PanelRow
+        badge={
+          <span className="grid size-6 place-items-center rounded-full bg-brand">
+            <Tick className="size-4 text-white" />
+          </span>
+        }
+      >
+        <p className="flex items-center gap-1.5 text-[17px] font-bold tracking-[-0.43px] text-brand">
+          <SanText san={san} color={color} glyph={28} />
+          <span>is correct!</span>
+        </p>
+      </PanelRow>
+    </motion.div>
+  );
+}
+
+/** Sparks drifting up out of the Solved bar — the "clean solve" flourish. */
 function Sparks() {
-  const seeds = [8, 24, 41, 57, 72, 88];
+  const seeds = [10, 26, 43, 59, 74, 90];
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       {seeds.map((left, i) => (
         <motion.span
           key={left}
-          className="absolute bottom-2 block size-1.5 rounded-[1px] bg-brand"
+          className="absolute bottom-1 block size-1 rounded-[1px] bg-white/70"
           style={{ left: `${left}%` }}
           initial={{ opacity: 0 }}
-          animate={{ y: [0, -54], opacity: [0, 0.9, 0], rotate: [0, 180] }}
+          animate={{ y: [0, -40], opacity: [0, 0.9, 0], rotate: [0, 180] }}
           transition={{
-            duration: 2.4,
+            duration: 2.2,
             repeat: Infinity,
-            delay: i * 0.38,
+            delay: i * 0.34,
             ease: "easeOut",
           }}
         />
@@ -301,123 +279,162 @@ function Sparks() {
 }
 
 /**
- * What the two briefing cards become once the puzzle is put right.
+ * The green bar that closes the puzzle out, with the evaluation it recovered.
  *
- * The panel used to empty out at exactly the moment worth celebrating, and with
- * it went the record of what the puzzle was even about. This keeps both halves
- * on screen — the mistake, now settled, and the correction — and grades the
- * solve, because "found it cold" and "needed the answer" should not feel the
- * same.
+ * Figma calls this simply "Solved"; the wording widens only when the solve
+ * wasn't clean, so "found it cold" and "needed the answer" still read
+ * differently without inventing a colour the design doesn't have.
  */
-function SolvedCard({
+function SolvedBar({
   kind,
-  playedSan,
-  foundSan,
   fromLabel,
   toLabel,
 }: {
   kind: Outcome;
-  playedSan: string;
-  foundSan: string;
-  /** Evaluation the mistake left behind, and where the solution takes it. */
   fromLabel: string;
   toLabel: string;
 }) {
   const clean = kind === "solved-clean";
-  const failed = kind === "failed";
-  const headline = clean
-    ? "Solved clean"
-    : failed
+  const text =
+    kind === "failed"
       ? "Solution revealed"
-      : "Solved with help";
-  const blurb = clean
-    ? "First try, no hints — you found the move you missed in the game."
-    : failed
-      ? "Worth replaying this one from memory once the queue is done."
-      : "You got there. Try it again later without the hint to make it stick.";
-  const tone = clean
-    ? { ring: "border-brand/45", bg: "bg-brand/[0.11]", text: "text-brand" }
-    : failed
-      ? { ring: "border-line/70", bg: "bg-white/[0.04]", text: "text-ink-soft" }
-      : { ring: "border-[#e0a33f]/40", bg: "bg-[#e0a33f]/[0.09]", text: "text-[#e8b45c]" };
+      : clean
+        ? "Solved"
+        : "Solved with a hint";
 
   return (
-    <div className="px-5 py-5">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-        What happened in your game
+    <motion.div
+      className="relative flex h-14 items-center justify-between overflow-hidden rounded-[10px] bg-brand px-4"
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: "spring", stiffness: 420, damping: 26 }}
+    >
+      {clean && <Sparks />}
+      {/* A single shine sweeping across on arrival. */}
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+        initial={{ x: "-140%" }}
+        animate={{ x: "420%" }}
+        transition={{ duration: 1.1, delay: 0.2, ease: "easeInOut" }}
+      />
+      <p className="relative flex items-center gap-1 text-[17px] font-bold tracking-[-0.43px] text-white">
+        <Tick className="size-6 shrink-0 text-white" />
+        {text}
       </p>
+      <p className="relative flex items-center gap-[7px] text-[13px] font-bold leading-[13px] tabular-nums">
+        <span className="text-white/60">{fromLabel}</span>
+        <span className="text-[#ede9e3]">&rarr;</span>
+        <span className="text-white">{toLabel}</span>
+      </p>
+    </motion.div>
+  );
+}
 
-      {/* The mistake, settled — muted now that it has been answered. */}
-      <motion.div
-        className="mt-2.5 flex items-center justify-between gap-3 rounded-[10px] border border-line/60 bg-white/[0.03] px-3.5 py-3"
-        initial={{ opacity: 1 }}
-        animate={{ opacity: 0.75 }}
-        transition={{ duration: 0.5, delay: 0.35 }}
-      >
-        <p className="text-[12px] text-ink-soft">
-          You played{" "}
-          <span className="font-display text-[15px] font-black text-ink-muted line-through decoration-[#e0625c]/60 decoration-2">
-            {playedSan}
-          </span>
-        </p>
-        <p className="text-[13px] font-bold tabular-nums text-ink-faint">
-          {fromLabel}
-        </p>
-      </motion.div>
-
-      {/* The correction — the card that gets the celebration. */}
-      <motion.div
-        className={cn(
-          "relative mt-2.5 overflow-hidden rounded-[10px] border p-4",
-          tone.ring,
-          tone.bg,
-        )}
-        initial={{ opacity: 0, y: 10, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: "spring", stiffness: 420, damping: 26 }}
-      >
-        {clean && <Sparks />}
-        {/* A single shine sweeping across on arrival. */}
-        <motion.div
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/[0.14] to-transparent"
-          initial={{ x: "-140%" }}
-          animate={{ x: "420%" }}
-          transition={{ duration: 1.1, delay: 0.25, ease: "easeInOut" }}
-        />
-
-        <div className="relative flex items-baseline justify-between gap-3">
-          <motion.p
-            className={cn("font-display text-[20px] font-black leading-none", tone.text)}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.12, duration: 0.3 }}
+/**
+ * The middle of the panel while a puzzle is open.
+ *
+ * Reads top to bottom as a story: what already happened (past tense, the move
+ * struck through, with the evaluation it cost), whose turn it is now, then a
+ * row per move of the line as it is found — so a multi-move puzzle shows
+ * progress instead of staying silent until the end.
+ */
+function PuzzleBrief({
+  puzzle,
+  userSide,
+  solved,
+  outcome,
+  replaying,
+  found,
+  wasLabel,
+  nowLabel,
+  toLabel,
+}: {
+  puzzle: SolvePuzzle;
+  userSide: PieceColor;
+  solved: boolean;
+  outcome: Outcome;
+  /** The mistake is replaying itself on the board right now. */
+  replaying: boolean;
+  /** The solver's own moves found so far, in order. */
+  found: string[];
+  /** Evaluation that was available, what the mistake left, where it ends up. */
+  wasLabel: string;
+  nowLabel: string;
+  toLabel: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2 px-6 pb-6">
+      {/* Once the puzzle is answered the mistake stops being the headline. */}
+      {!solved && (
+        <>
+          <p
+            className="pb-1 text-[11px] font-bold uppercase leading-[16.5px] tracking-[0.275px]"
+            style={{ color: LABEL }}
           >
-            {headline}
-          </motion.p>
-          <p className="text-[13px] font-bold leading-none tabular-nums">
-            <span className="text-ink-faint">{fromLabel}</span>
-            <span className="mx-1.5 text-ink-faint">→</span>
-            <span className={tone.text}>{toLabel}</span>
+            What happened in your game
           </p>
-        </div>
+          <div className={cn(CARD, "p-4")}>
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12px] leading-[12px]" style={{ color: MUTED }}>
+                  You played
+                </p>
+                <p
+                  className="relative mt-1.5 inline-flex items-center font-display text-[19px] font-black leading-[19px]"
+                  style={{ color: WRONG }}
+                >
+                  <SanText san={puzzle.played.san} color={userSide} glyph={26} />
+                  {/* Struck through as one unit — a text-decoration would skip
+                      the glyph and stop short of it. */}
+                  <span
+                    aria-hidden
+                    className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2"
+                    style={{ backgroundColor: WRONG }}
+                  />
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p
+                  className="text-[10px] uppercase leading-[10px] tracking-[0.25px]"
+                  style={{ color: LABEL }}
+                >
+                  Evaluation
+                </p>
+                <p className="mt-1.5 text-[14px] font-bold leading-[14px] tabular-nums">
+                  <span style={{ color: MUTED }}>{wasLabel}</span>
+                  <span className="mx-1.5" style={{ color: LABEL }}>
+                    &rarr;
+                  </span>
+                  <span style={{ color: WRONG }}>{nowLabel}</span>
+                </p>
+              </div>
+            </div>
+            <p
+              className="mt-3 text-[12px] leading-[16.5px]"
+              style={{ color: MUTED }}
+            >
+              {replaying
+                ? "Replaying it on the board…"
+                : "The board rewound to just before it. The crossed-out piece marks where it went — that square is the mistake."}
+            </p>
+          </div>
+        </>
+      )}
 
-        <motion.p
-          className="relative mt-2.5 text-[13px] leading-snug text-ink-muted"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.28, duration: 0.35 }}
-        >
-          The move was{" "}
-          <span className="font-display text-[15px] font-black text-white">
-            {foundSan}
-          </span>
-          . {blurb}
-        </motion.p>
-      </motion.div>
+      <SideToMove side={userSide} />
+
+      {found.map((san, i) => (
+        <CorrectMove key={`${san}-${i}`} san={san} color={userSide} />
+      ))}
+
+      {solved && (
+        <SolvedBar kind={outcome} fromLabel={nowLabel} toLabel={toLabel} />
+      )}
     </div>
   );
 }
+
 
 /* ---------------------------------------------------------------- Start view */
 
@@ -1087,17 +1104,11 @@ export function PuzzleSolver() {
     ? evalLabel(lastPly.cp, lastPly.mate, lastPly.mate === 0, userSide)
     : barLabel;
 
-  /** How much of the solution the solver has found, for the "keep going" card. */
-  const userPlies = line.filter((p) => p.side === userSide);
-  const foundPlies = line.slice(0, reachedPly).filter((p) => p.side === userSide);
-  const lineProgress =
-    foundPlies.length > 0
-      ? {
-          san: foundPlies[foundPlies.length - 1].san,
-          done: foundPlies.length,
-          total: userPlies.length,
-        }
-      : null;
+  /** The solver's own moves found so far — one "is correct!" row each. */
+  const foundSans = line
+    .slice(0, reachedPly)
+    .filter((p) => p.side === userSide)
+    .map((p) => p.san);
 
   const coachText = !puzzle
     ? coachIntro
@@ -1200,32 +1211,26 @@ export function PuzzleSolver() {
 
         {view === "run" && puzzle && (
           <>
-            {/* Coach + classification tag */}
-            <div className="shrink-0 space-y-3 border-b border-line/40 px-5 pb-4 pt-4">
-              <CoachBubble text={coachText} />
+            {/* Which game this came from, then the coach — Figma's order. */}
+            <div className="shrink-0 space-y-6 px-6 pb-6 pt-6">
               <ClassificationTag puzzle={puzzle} />
+              <CoachBubble text={coachText} />
             </div>
 
-            {/* Fills the panel before the first move, then gets out of the way
+            {/* Fills the panel while a puzzle is open, then gets out of the way
                 so the footer sits where it always does. */}
             <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-              {solved ? (
-                <SolvedCard
-                  kind={outcomes[puzzle.id] ?? "solved-clean"}
-                  playedSan={puzzle.played.san}
-                  foundSan={line[0]?.san ?? ""}
-                  fromLabel={dropLabel.current}
-                  toLabel={finalLabel}
-                />
-              ) : (
-                <MistakeBrief
-                  san={puzzle.played.san}
-                  wasLabel={peakLabel}
-                  nowLabel={dropLabel.current}
-                  replaying={replaying}
-                  progress={lineProgress}
-                />
-              )}
+              <PuzzleBrief
+                puzzle={puzzle}
+                userSide={userSide}
+                solved={solved}
+                outcome={outcomes[puzzle.id] ?? "solved-clean"}
+                replaying={replaying}
+                found={foundSans}
+                wasLabel={peakLabel}
+                nowLabel={dropLabel.current}
+                toLabel={finalLabel}
+              />
             </div>
 
             {/* Footer — progress, action buttons, nav */}
@@ -1276,7 +1281,8 @@ export function PuzzleSolver() {
                     title="Engine analysis — coming soon"
                     className={cn(DARK_BTN, "w-14 shrink-0")}
                   >
-                    <Search />
+                    {/* Chess.com's game-analysis glyph, not a search magnifier. */}
+                    <Image src={ICON.analysis} width={22} height={22} alt="" />
                   </button>
                   <button
                     type="button"
