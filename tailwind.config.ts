@@ -110,10 +110,32 @@ const config: Config = {
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
+        // The mated king's square, breathing red rather than flashing.
+        "loss-pulse": {
+          "0%, 100%": { opacity: "0.3" },
+          "50%": { opacity: "0.85" },
+        },
+        // The mated king takes the blow once, then settles.
+        "king-topple": {
+          "0%": { transform: "rotate(0deg)" },
+          "22%": { transform: "rotate(-9deg)" },
+          "44%": { transform: "rotate(6deg)" },
+          "66%": { transform: "rotate(-3.5deg)" },
+          "84%": { transform: "rotate(1.5deg)" },
+          "100%": { transform: "rotate(0deg)" },
+        },
+        "badge-pop": {
+          from: { opacity: "0", transform: "scale(0.4)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.45s cubic-bezier(0.22,1,0.36,1) both",
         shimmer: "shimmer 1.6s infinite",
+        "loss-pulse": "loss-pulse 1.9s ease-in-out infinite",
+        "king-topple":
+          "king-topple 0.75s cubic-bezier(0.36,0.07,0.19,0.97) 0.15s 1 both",
+        "badge-pop": "badge-pop 0.3s cubic-bezier(0.22,1,0.36,1) 0.35s both",
       },
     },
   },

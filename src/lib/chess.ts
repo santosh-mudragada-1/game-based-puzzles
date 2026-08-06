@@ -25,6 +25,16 @@ export interface BoardCell {
   light: boolean;
 }
 
+/** Where each king stands, for the win/loss badges. */
+export function kingSquares(cells: BoardCell[]): Record<PieceColor, string> {
+  const out = { white: "", black: "" };
+  for (const c of cells) {
+    if (c.piece === "K") out.white = c.square;
+    else if (c.piece === "k") out.black = c.square;
+  }
+  return out;
+}
+
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
 
 /**

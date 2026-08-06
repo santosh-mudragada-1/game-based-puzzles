@@ -69,131 +69,202 @@ const CLASS_ORDER: MoveClassification[] = [
 ];
 
 /**
- * The real per-classification counts Chess.com reported for this game
- * (White = jazzzzzzzyyyyy, Black = santoshmudragada). Hardcoded so the
- * overview table is faithful rather than derived from a fake heuristic.
+ * Every position of the game analysed with **Stockfish 18** (full NNUE build,
+ * depth 18, one search per ply). The table below is that output baked in:
+ * running 131 searches in the browser on page load would take minutes, and the
+ * result never changes.
+ *
+ * Classification is win-percentage loss for the side that moved: they found the
+ * engine's move (best), or gave up 2 / 5 / 10 / 20 percentage points of winning
+ * chances (excellent / good / inaccuracy / mistake / blunder). "Missed" is a
+ * forced win that was on the board and no longer is; "great" is the only move
+ * that holds a balanced position.
+ *
+ * These are our numbers, not Chess.com's own report, so they don't match it
+ * move for move — but the graph, the dots, the move list and the counts table
+ * all read from this one source and therefore agree with each other, which the
+ * hand-authored curve they replaced did not.
  */
-const REAL_COUNTS: Record<
-  MoveClassification,
-  { white: number; black: number }
-> = {
-  brilliant: { white: 0, black: 0 },
-  great: { white: 1, black: 1 },
-  book: { white: 2, black: 2 },
-  best: { white: 21, black: 21 },
-  excellent: { white: 19, black: 20 },
-  good: { white: 9, black: 13 },
-  inaccuracy: { white: 4, black: 5 },
-  mistake: { white: 3, black: 1 },
-  missed: { white: 2, black: 2 },
-  blunder: { white: 1, black: 0 },
-};
-
-/**
- * A hand-authored evaluation curve (white-positive centipawns; negative = Black
- * better) that actually tracks the game — roughly level in the opening, then
- * swinging decisively to Black as White's mistakes pile up and Black promotes.
- * Material-only eval was flat 0.0 for most moves and contradicted the move
- * classifications shown beside it.
- */
-const EVAL_POINTS: [number, number][] = [
-  [0, 0],
-  [4, 20],
-  [6, 10],
-  [10, -20],
-  [16, -55],
-  [22, -80],
-  [24, -150],
-  [30, -170],
-  [34, -150],
-  [40, -205],
-  [44, -195],
-  [46, -290],
-  [50, -360],
-  [56, -330],
-  [62, -390],
-  [70, -430],
-  [80, -480],
-  [90, -545],
-  [100, -640],
-  [110, -820],
-  [117, -1150],
-  [118, -1500],
-  [124, -1560],
-  [130, -1650],
+const ANALYSIS: [number, MoveClassification][] = [
+  [37, "book"],
+  [41, "book"],
+  [-5, "book"],
+  [-8, "book"],
+  [-89, "inaccuracy"],
+  [-47, "good"],
+  [-44, "best"],
+  [-4, "good"],
+  [-8, "best"],
+  [-5, "best"],
+  [-49, "good"],
+  [-47, "excellent"],
+  [-61, "excellent"],
+  [-61, "best"],
+  [-62, "best"],
+  [-30, "good"],
+  [-78, "good"],
+  [-58, "excellent"],
+  [-58, "best"],
+  [36, "inaccuracy"],
+  [-14, "good"],
+  [4, "excellent"],
+  [-194, "mistake"],
+  [-59, "mistake"],
+  [-64, "best"],
+  [-56, "great"],
+  [-55, "best"],
+  [-57, "best"],
+  [-52, "best"],
+  [-57, "best"],
+  [-48, "best"],
+  [9, "inaccuracy"],
+  [-120, "mistake"],
+  [-85, "good"],
+  [-686, "blunder"],
+  [-499, "inaccuracy"],
+  [-579, "good"],
+  [-173, "blunder"],
+  [-449, "mistake"],
+  [-469, "excellent"],
+  [-587, "good"],
+  [-648, "best"],
+  [-644, "best"],
+  [-539, "good"],
+  [-723, "inaccuracy"],
+  [-750, "best"],
+  [-779, "best"],
+  [-573, "inaccuracy"],
+  [-587, "best"],
+  [-599, "best"],
+  [-607, "best"],
+  [-491, "good"],
+  [-515, "best"],
+  [-525, "best"],
+  [-524, "best"],
+  [-520, "best"],
+  [-546, "excellent"],
+  [-485, "good"],
+  [-498, "best"],
+  [-490, "best"],
+  [-497, "best"],
+  [-506, "excellent"],
+  [-533, "excellent"],
+  [-485, "good"],
+  [-520, "excellent"],
+  [-506, "excellent"],
+  [-507, "best"],
+  [-472, "excellent"],
+  [-495, "excellent"],
+  [-494, "excellent"],
+  [-490, "best"],
+  [-517, "excellent"],
+  [-570, "good"],
+  [-641, "best"],
+  [-643, "excellent"],
+  [-643, "best"],
+  [-656, "best"],
+  [-555, "good"],
+  [-601, "best"],
+  [-627, "best"],
+  [-647, "best"],
+  [-645, "best"],
+  [-642, "best"],
+  [-74, "missed"],
+  [-656, "blunder"],
+  [-661, "excellent"],
+  [-676, "best"],
+  [-684, "excellent"],
+  [-1076, "inaccuracy"],
+  [-2036, "best"],
+  [-3000, "best"],
+  [-3000, "best"],
+  [-3000, "best"],
+  [-3000, "excellent"],
+  [-3000, "excellent"],
+  [-3000, "excellent"],
+  [-3000, "excellent"],
+  [-3000, "excellent"],
+  [-3000, "excellent"],
+  [-3000, "excellent"],
+  [-3000, "excellent"],
+  [-3000, "excellent"],
+  [-3000, "excellent"],
+  [-3000, "best"],
+  [-3000, "excellent"],
+  [-3000, "excellent"],
+  [-3000, "best"],
+  [-3000, "best"],
+  [-3000, "best"],
+  [-3000, "excellent"],
+  [-3000, "excellent"],
+  [-3000, "excellent"],
+  [-3000, "best"],
+  [-3000, "excellent"],
+  [-3000, "best"],
+  [-3000, "best"],
+  [-3000, "excellent"],
+  [-3000, "best"],
+  [-3000, "excellent"],
+  [-3000, "best"],
+  [-3000, "best"],
+  [-3000, "excellent"],
+  [-3000, "best"],
+  [-3000, "best"],
+  [-3000, "best"],
+  [-3000, "excellent"],
+  [-3000, "best"],
+  [-3000, "best"],
+  [-3000, "best"],
+  [-3000, "best"],
 ];
 
-function evalCurve(ply: number): number {
-  const pts = EVAL_POINTS;
-  if (ply <= pts[0][0]) return pts[0][1];
-  const last = pts[pts.length - 1];
-  if (ply >= last[0]) return last[1];
-  for (let i = 1; i < pts.length; i++) {
-    const [x0, y0] = pts[i - 1];
-    const [x1, y1] = pts[i];
-    if (ply <= x1) {
-      const t = (ply - x0) / (x1 - x0);
-      return Math.round(y0 + (y1 - y0) * t);
-    }
+const REAL_COUNTS: Record<MoveClassification, { white: number; black: number }> = {
+  brilliant: {
+    white: 0,
+    black: 0
+  },
+  great: {
+    white: 0,
+    black: 1
+  },
+  book: {
+    white: 2,
+    black: 2
+  },
+  best: {
+    white: 34,
+    black: 24
+  },
+  excellent: {
+    white: 15,
+    black: 22
+  },
+  good: {
+    white: 6,
+    black: 9
+  },
+  inaccuracy: {
+    white: 3,
+    black: 4
+  },
+  mistake: {
+    white: 3,
+    black: 1
+  },
+  missed: {
+    white: 0,
+    black: 1
+  },
+  blunder: {
+    white: 2,
+    black: 1
   }
-  return last[1];
-}
-
-/**
- * Extra classification markers (beyond the PGN's own annotations at plies
- * 5/23/45/130) placed where the eval curve actually swings for the moving
- * side, so the graph's coloured dots sit on real cliffs rather than flat runs.
- * Odd ply = White, even ply = Black.
- */
-const DOT_OVERRIDES: Record<number, MoveClassification> = {
-  15: "inaccuracy", // White — early slide
-  24: "great", // Black — punishes 12.Na4?
-  34: "inaccuracy", // Black — lets the edge dip
-  52: "inaccuracy", // Black — a wobble in the conversion
-  113: "mistake", // White — the endgame collapses
-  115: "blunder", // White — and collapses further
-  118: "great", // Black — promotes (…g1=Q)
 };
-
-const TYPE_MAP: Record<string, MoveClassification> = {
-  brilliant: "brilliant",
-  great: "great",
-  best: "best",
-  excellent: "excellent",
-  good: "good",
-  book: "book",
-  inaccuracy: "inaccuracy",
-  mistake: "mistake",
-  miss: "missed",
-  missed: "missed",
-  blunder: "blunder",
-  winner: "best",
-  checkmatewhite: "best",
-  checkmateblack: "best",
-};
-
-function classifyComment(comment: string): MoveClassification | undefined {
-  const m = /type;([A-Za-z]+)/.exec(comment);
-  return m ? TYPE_MAP[m[1].toLowerCase()] : undefined;
-}
 
 function parseClock(comment: string): string {
   const m = /%clk\s+\d+:(\d+):(\d+)/.exec(comment);
   if (!m) return "";
   return `${parseInt(m[1], 10)}:${m[2].padStart(2, "0")}`;
-}
-
-/**
- * Deterministic filler for un-annotated moves. Most moves are "excellent" or
- * "good" (which the move list leaves un-badged); only ~30% are "best" so the
- * list shows a scattering of stars rather than one on every row.
- */
-function fillerClass(ply: number): MoveClassification {
-  if (ply <= 4) return "book";
-  const r = (ply * 7) % 10;
-  if (r < 3) return "excellent"; // 0–2
-  if (r < 7) return "good"; // 3–6
-  return "best"; // 7–9  (~30%)
 }
 
 function buildModel(): ReviewModel {
@@ -218,9 +289,8 @@ function buildModel(): ReviewModel {
       from: m.from,
       to: m.to,
       fen,
-      classification:
-        classifyComment(comment) ?? DOT_OVERRIDES[i + 1] ?? fillerClass(i + 1),
-      evalCp: evalCurve(i + 1),
+      classification: ANALYSIS[i]?.[1] ?? "good",
+      evalCp: ANALYSIS[i]?.[0] ?? 0,
       clock: parseClock(comment),
     };
   });
@@ -248,7 +318,7 @@ function buildModel(): ReviewModel {
     userSide: "black",
     plies,
     counts,
-    accuracy: { white: 75.7, black: 79.3 },
+    accuracy: { white: 88.5, black: 91.2 },
     gameRating: { white: 1000, black: 1400 },
     phases: [
       { phase: "Opening", white: "good", black: "good" },

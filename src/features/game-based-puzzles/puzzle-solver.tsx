@@ -1073,6 +1073,11 @@ export function PuzzleSolver() {
         });
     }
   }
+  /** A mating line ends the game on the board, not just the puzzle. */
+  const shownPly = vp > 0 ? line[vp - 1] : null;
+  const gameEnd =
+    shownPly?.isMate && replay === "done" ? { winner: shownPly.side } : null;
+
   // What the board is actually showing — the intro replay borrows it briefly.
   const boardFen =
     replay === "forward" && playedFen ? playedFen : currentFen;
@@ -1168,6 +1173,7 @@ export function PuzzleSolver() {
                   onMove={onMove}
                   highlight={highlight}
                   dangerSquare={dangerSquare}
+                  gameEnd={gameEnd}
                   hint={hintSquares}
                   arrows={arrows}
                   ghost={ghost}

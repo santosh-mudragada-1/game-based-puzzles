@@ -6,9 +6,11 @@ import { motion, useAnimationControls } from "framer-motion";
 import {
   boardFromFen,
   cellsForOrientation,
+  kingSquares,
   pieceImage,
   pieceLabel,
 } from "@/lib/chess";
+import { KingBadge } from "@/components/board/king-badge";
 import { legalTargets, pieceColorAt } from "@/lib/puzzle";
 import type { PieceColor } from "@/types";
 import { cn } from "@/lib/utils";
@@ -31,6 +33,8 @@ interface PuzzleBoardProps {
   highlight?: string[];
   /** King-in-check square, painted red. */
   dangerSquare?: string | null;
+  /** Decided game: crowns the winner's king and topples the loser's. */
+  gameEnd?: { winner: PieceColor } | null;
   /** Teal ring on the piece(s) to move (the "Hint" reveal). */
   hint?: string[];
   arrows?: BoardArrow[];
@@ -93,6 +97,7 @@ export function PuzzleBoard({
   onMove,
   highlight = [],
   dangerSquare,
+  gameEnd = null,
   hint = [],
   arrows = [],
   ghost = null,
@@ -108,6 +113,7 @@ export function PuzzleBoard({
 
   const highlightSet = new Set(highlight);
   const hintSet = new Set(hint);
+  const kings = gameEnd ? kingSquares(cells) : null;
   const targets = React.useMemo(
     () => (selected ? new Set(legalTargets(fen, selected)) : new Set<string>()),
     [selected, fen],
@@ -179,6 +185,11 @@ export function PuzzleBoard({
           ? moveOffset(lastMove!.from, lastMove!.to, orientation)
           : null;
 
+        const isWinnerKing = kings?.[gameEnd!.winner] === cell.square;
+        const isLoserKing =
+          kings?.[gameEnd!.winner === "white" ? "black" : "white"] ===
+          cell.square;
+
         const focusable = interactive && (pickable || isTarget || isSel);
         return (
           <div
@@ -216,7 +227,13 @@ export function PuzzleBoard({
             )}
           >
             {dangerSquare === cell.square && (
-              <div className="absolute inset-0 bg-[#e15353]" />
+              <div
+                className={cn(
+                  "absolute inset-0 bg-[#e15353]",
+                  // A mated king keeps breathing red; a plain check is static.
+                  isLoserKing && "animate-loss-pulse",
+                )}
+              />
             )}
             {(highlightSet.has(cell.square) || isSel) && (
               <div className="absolute inset-0 bg-board-highlight/55" />
@@ -274,6 +291,7 @@ export function PuzzleBoard({
                   className={cn(
                     "object-contain p-[5%]",
                     pickable ? "cursor-grab active:cursor-grabbing" : "",
+                    isLoserKing && "animate-king-topple",
                   )}
                   draggable={pickable}
                   onDragStart={(e) => {
@@ -289,6 +307,9 @@ export function PuzzleBoard({
                 />
               </motion.div>
             )}
+
+            {isWinnerKing && <KingBadge kind="winner" />}
+            {isLoserKing && <KingBadge kind="loser" />}
 
             {/* Legal-move indicators: a dot for a quiet move, a ring for a capture. */}
             {isTarget &&

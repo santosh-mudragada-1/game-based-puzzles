@@ -75,6 +75,16 @@ export function ReviewBoard({
   const highlight = highlightOverride ?? (ply ? [ply.from, ply.to] : []);
   const evalPawns = (ply?.evalCp ?? 0) / 100;
 
+  // Once the final move is on the board and it was mate, crown the winner and
+  // topple the loser. Suppressed while previewing an alternative line.
+  const last = model.plies[model.plies.length - 1];
+  const gameEnd =
+    last?.san.endsWith("#") &&
+    currentPly >= model.plies.length &&
+    !fenOverride
+      ? { winner: last.side }
+      : null;
+
   const opponent = model.userSide === "black" ? model.white : model.black;
   const you = model.userSide === "black" ? model.black : model.white;
 
@@ -100,6 +110,7 @@ export function ReviewBoard({
             fen={fen}
             orientation={model.userSide}
             highlight={highlight}
+            gameEnd={gameEnd}
             showCoordinates
             className="h-full w-full shadow-raised"
           />

@@ -2,9 +2,11 @@ import Image from "next/image";
 import {
   boardFromFen,
   cellsForOrientation,
+  kingSquares,
   pieceImage,
   pieceLabel,
 } from "@/lib/chess";
+import { KingBadge } from "@/components/board/king-badge";
 import type { PieceColor } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +19,8 @@ interface MiniBoardProps {
   hint?: string[];
   showCoordinates?: boolean;
   sideToMove?: PieceColor;
+  /** Decided game: crowns the winner's king and topples the loser's. */
+  gameEnd?: { winner: PieceColor } | null;
   rounded?: boolean;
   className?: string;
 }
@@ -32,6 +36,7 @@ export function MiniBoard({
   hint = [],
   showCoordinates = false,
   sideToMove,
+  gameEnd = null,
   rounded = true,
   className,
 }: MiniBoardProps) {
@@ -39,6 +44,7 @@ export function MiniBoard({
   const cells = cellsForOrientation(grid, orientation);
   const highlightSet = new Set(highlight);
   const hintSet = new Set(hint);
+  const kings = gameEnd ? kingSquares(cells) : null;
 
   return (
     <div
@@ -57,6 +63,11 @@ export function MiniBoard({
         const isLeftEdge = col === 0;
         const coordColor = cell.light ? "text-board-dark" : "text-board-light";
 
+        const isWinnerKing = kings?.[gameEnd!.winner] === cell.square;
+        const isLoserKing =
+          kings?.[gameEnd!.winner === "white" ? "black" : "white"] ===
+          cell.square;
+
         return (
           <div
             key={cell.square}
@@ -68,6 +79,9 @@ export function MiniBoard({
             {highlightSet.has(cell.square) && (
               <div className="absolute inset-0 bg-board-highlight/55" />
             )}
+            {isLoserKing && (
+              <div className="absolute inset-0 animate-loss-pulse bg-[#e15353]" />
+            )}
             {hintSet.has(cell.square) && (
               <div className="absolute inset-[9%] rounded-full ring-[3px] ring-brand/80" />
             )}
@@ -78,11 +92,17 @@ export function MiniBoard({
                 alt={pieceLabel(cell.piece)}
                 fill
                 sizes="(max-width: 640px) 12vw, 64px"
-                className="select-none object-contain p-[5%]"
+                className={cn(
+                  "select-none object-contain p-[5%]",
+                  isLoserKing && "animate-king-topple",
+                )}
                 draggable={false}
                 priority={false}
               />
             )}
+
+            {isWinnerKing && <KingBadge kind="winner" />}
+            {isLoserKing && <KingBadge kind="loser" />}
 
             {showCoordinates && isBottomEdge && (
               <span
