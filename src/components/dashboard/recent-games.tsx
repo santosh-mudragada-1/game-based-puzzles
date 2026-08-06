@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import type { Game, GameResult, PlayerRef } from "@/types";
@@ -7,11 +9,21 @@ import { Badge } from "@/components/shared/badge";
 import { Button } from "@/components/shared/button";
 import { FavoriteHeart } from "./favorite-heart";
 import { recentGames, meUsername } from "@/data/games";
+import { useChessAccount } from "@/hooks/use-chess-account";
+import { flagOf, toGame } from "@/lib/chesscom";
 import { GAME_ICON } from "@/lib/assets";
 import { cn } from "@/lib/utils";
 
-function PlayerLine({ p, isWinner }: { p: PlayerRef; isWinner: boolean }) {
-  const isMe = p.username === meUsername;
+function PlayerLine({
+  p,
+  isWinner,
+  me,
+}: {
+  p: PlayerRef;
+  isWinner: boolean;
+  me: string;
+}) {
+  const isMe = p.username.toLowerCase() === me.toLowerCase();
   return (
     <div className="flex items-center gap-2">
       <span
@@ -72,7 +84,7 @@ function ResultIcon({ result }: { result: GameResult }) {
   );
 }
 
-function GameRow({ g }: { g: Game }) {
+function GameRow({ g, me }: { g: Game; me: string }) {
   const whiteWon = g.whiteScore === 1;
   const blackWon = g.blackScore === 1;
   const hasPuzzles = g.reviewed && g.blindSpots > 0;
@@ -91,8 +103,8 @@ function GameRow({ g }: { g: Game }) {
       {/* Players */}
       <td className="py-2.5 pl-1 pr-2">
         <div className="flex flex-col gap-1.5">
-          <PlayerLine p={g.white} isWinner={whiteWon} />
-          <PlayerLine p={g.black} isWinner={blackWon} />
+          <PlayerLine p={g.white} isWinner={whiteWon} me={me} />
+          <PlayerLine p={g.black} isWinner={blackWon} me={me} />
         </div>
       </td>
 
@@ -150,15 +162,36 @@ function GameRow({ g }: { g: Game }) {
   );
 }
 
+/** The dashboard's Game History: the connected archive, or the sample game. */
 export function RecentGames() {
+  const { profile, games, status } = useChessAccount();
+  const live = games.length > 0;
+  const rows = live
+    ? games.slice(0, 10).map((g) => {
+        const row = toGame(g);
+        // The archive carries no country per player; we only know our own.
+        const flag = flagOf(profile?.country ?? undefined) || undefined;
+        if (g.userSide === "white") row.white.countryFlag = flag;
+        else row.black.countryFlag = flag;
+        return row;
+      })
+    : recentGames;
+  const me = live ? (profile?.username ?? "") : meUsername;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Game History</CardTitle>
-        <Button variant="link" size="sm" className="px-0">
-          View All Games
+        <Button variant="link" size="sm" className="px-0" asChild>
+          <Link href="/games">View All Games</Link>
         </Button>
       </CardHeader>
+
+      {status === "loading" && !live && (
+        <p className="border-t border-line/30 px-4 py-3 text-[13px] text-ink-soft">
+          Pulling your games from Chess.com…
+        </p>
+      )}
 
       <div className="overflow-x-auto scrollbar-thin">
         <table className="w-full min-w-[720px] border-collapse">
@@ -191,8 +224,8 @@ export function RecentGames() {
             </tr>
           </thead>
           <tbody>
-            {recentGames.map((g) => (
-              <GameRow key={g.id} g={g} />
+            {rows.map((g) => (
+              <GameRow key={g.id} g={g} me={me} />
             ))}
           </tbody>
         </table>

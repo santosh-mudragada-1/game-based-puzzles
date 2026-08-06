@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { PlanProvider } from "@/hooks/use-plan";
 import { PuzzleProgressProvider } from "@/hooks/use-puzzle-progress";
+import { ChessAccountProvider } from "@/hooks/use-chess-account";
+import { ConnectDialog } from "@/components/onboarding/connect-dialog";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -33,9 +35,13 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} dark`}>
       <body className="min-h-screen bg-bg">
-        <PlanProvider>
-          <PuzzleProgressProvider>{children}</PuzzleProgressProvider>
-        </PlanProvider>
+        <ChessAccountProvider>
+          <PlanProvider>
+            <PuzzleProgressProvider>{children}</PuzzleProgressProvider>
+          </PlanProvider>
+          {/* Asks for the Chess.com username once, then gets out of the way. */}
+          <ConnectDialog />
+        </ChessAccountProvider>
       </body>
     </html>
   );

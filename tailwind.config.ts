@@ -1,4 +1,7 @@
 import type { Config } from "tailwindcss";
+// Static import rather than require(): the config is loaded as ESM, where
+// `require` is not defined.
+import animate from "tailwindcss-animate";
 
 /**
  * Chess.com dark-theme design tokens.
@@ -139,7 +142,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [animate],
 };
 
 export default config;
