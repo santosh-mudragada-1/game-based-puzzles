@@ -1,17 +1,37 @@
 import { cn } from "@/lib/utils";
 
-/** Chess.com's result discs: green crown for the winner, red king for the loser. */
+/** Gold crown for the winner, red toppled king for the loser. */
 const TONE = {
-  winner: "#81b64c",
+  winner: "#e2a53a",
   loser: "#ca3431",
 } as const;
 
 /**
- * The badge pinned to a king's square once the game is decided.
+ * A crown, drawn rather than borrowed.
  *
- * Both glyphs are set from the "Chess" figurine font (see globals.css) inside an
- * SVG, so they scale with the square instead of needing a pixel size — the
- * winner gets the crown, the loser their own king knocked over.
+ * The figurine font's queen was doing this job and read as a queen on the
+ * board — five points, a coronet, no orb — so the winner gets a proper crown:
+ * three peaks with balls and a solid band.
+ */
+function Crown({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <path
+        d="M4.3 9.4 7.4 12.6 12 6.1 16.6 12.6 19.7 9.4 18.6 17.2H5.4Z"
+        fill="currentColor"
+      />
+      <rect x="5" y="18.4" width="14" height="2.9" rx="0.9" fill="currentColor" />
+      <circle cx="4.3" cy="8.3" r="2.1" fill="currentColor" />
+      <circle cx="12" cy="4.6" r="2.2" fill="currentColor" />
+      <circle cx="19.7" cy="8.3" r="2.1" fill="currentColor" />
+    </svg>
+  );
+}
+
+/**
+ * The badge pinned to a king's square once the game is decided: the winner is
+ * crowned, the loser's own king lies where it fell (that one is the "Chess"
+ * figurine glyph, rotated, so it matches the pieces beside it).
  */
 export function KingBadge({
   kind,
@@ -31,20 +51,23 @@ export function KingBadge({
       )}
       style={{ backgroundColor: TONE[kind] }}
     >
-      <svg viewBox="0 0 24 24" className="size-[72%] overflow-visible">
-        <text
-          x="12"
-          y={winner ? 19 : 18}
-          textAnchor="middle"
-          fontSize="21"
-          fill="white"
-          className="font-chess"
-          // The loser's king lies where it fell.
-          transform={winner ? undefined : "rotate(-52 12 12)"}
-        >
-          {winner ? "w" : "l"}
-        </text>
-      </svg>
+      {winner ? (
+        <Crown className="size-[64%] text-white" />
+      ) : (
+        <svg viewBox="0 0 24 24" className="size-[72%] overflow-visible">
+          <text
+            x="12"
+            y="18"
+            textAnchor="middle"
+            fontSize="21"
+            fill="white"
+            className="font-chess"
+            transform="rotate(-52 12 12)"
+          >
+            l
+          </text>
+        </svg>
+      )}
     </span>
   );
 }

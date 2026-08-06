@@ -10,6 +10,7 @@ import { ReviewBoard } from "@/components/review/review-board";
 import { PlaybackControls } from "@/components/review/playback-controls";
 import { CoachBubble } from "@/components/review/coach-bubble";
 import { EvalGraph } from "@/components/review/eval-graph";
+import { evalBarLabel } from "@/components/review/eval-bar";
 import { MoveListNav } from "@/components/review/move-list-nav";
 import { OverviewStats } from "@/components/review/overview-stats";
 import { ReviewBottomBar } from "@/components/review/review-bottom-bar";
@@ -28,36 +29,14 @@ const N = model.plies.length;
 const PUZZLE_COUNT = gamePuzzles.length;
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-/** White-positive centipawns → a signed pawn label (+1.5, −0.7, 0.0). */
-function formatEval(cp: number): string {
-  const p = cp / 100;
-  if (Math.abs(p) < 0.05) return "0.0";
-  const mag = Math.abs(p);
-  const digits = mag >= 10 ? 0 : 1;
-  return `${p > 0 ? "+" : "−"}${mag.toFixed(digits)}`;
-}
-
-/**
- * A graph-only evaluation: the model's smooth curve plus deterministic per-move
- * jitter and a spike at critical moves (against the mover), so the eval line
- * looks like a real, jagged Chess.com graph. The coach pill and eval bar keep
- * using the clean model eval — only the graph gets the extra liveliness.
- */
-const CRIT_SPIKE: Partial<Record<MoveClassification, number>> = {
-  blunder: 130,
-  missed: 70,
-  mistake: 80,
-  inaccuracy: 40,
-};
-function graphEval(ply: ReviewPly, i: number): number {
-  const s = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
-  const noise = ((s - Math.floor(s)) * 2 - 1) * 22; // ±22cp
-  let spike = 0;
-  const sp = CRIT_SPIKE[ply.classification];
-  if (sp) spike = ply.side === "white" ? -sp : sp;
-  else if (ply.classification === "great" || ply.classification === "brilliant")
-    spike = ply.side === "white" ? 40 : -40;
-  return ply.evalCp + noise + spike;
+/** The pill beside the coach line — same wording as the bar. */
+function formatEval(ply: ReviewPly): string {
+  const result = ply.san.endsWith("#")
+    ? ply.side === "white"
+      ? "1-0"
+      : "0-1"
+    : null;
+  return evalBarLabel(ply.evalCp / 100, ply.evalMate, result);
 }
 
 /** One-line coach commentary for a played move. */
@@ -378,16 +357,16 @@ export function GameReview() {
         ? {
             text: moveExplanation(ply, model.userSide),
             classification: ply.classification,
-            evalText: formatEval(ply.evalCp),
+            evalText: formatEval(ply),
           }
         : {
             text: moveCommentary(ply),
             classification: ply.classification,
-            evalText: formatEval(ply.evalCp),
+            evalText: formatEval(ply),
           };
 
   const graphPoints = model.plies.map((p, i) => ({
-    evalCp: graphEval(p, i),
+    evalCp: p.evalCp,
     classification: p.classification,
   }));
 

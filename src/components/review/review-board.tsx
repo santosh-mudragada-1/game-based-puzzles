@@ -74,6 +74,12 @@ export function ReviewBoard({
   const fen = fenOverride ?? ply?.fen ?? START_FEN;
   const highlight = highlightOverride ?? (ply ? [ply.from, ply.to] : []);
   const evalPawns = (ply?.evalCp ?? 0) / 100;
+  /** The result, once the move on the board is the one that ended the game. */
+  const result = ply?.san.endsWith("#")
+    ? ply.side === "white"
+      ? "1-0"
+      : "0-1"
+    : null;
 
   // Once the final move is on the board and it was mate, crown the winner and
   // topple the loser. Suppressed while previewing an alternative line.
@@ -102,6 +108,8 @@ export function ReviewBoard({
       <div className="flex min-h-0 items-stretch justify-center gap-1.5 sm:gap-2">
         <EvalBar
           evalPawns={evalPawns}
+          mate={ply?.evalMate ?? null}
+          result={result}
           orientation={model.userSide}
           className="w-5 shrink-0 sm:w-6"
         />
