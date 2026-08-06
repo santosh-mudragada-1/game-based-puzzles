@@ -11,24 +11,14 @@ export const CATEGORY_LABEL: Record<PuzzleCategory, string> = {
   blunder: "Blunder",
   mistake: "Mistake",
   "missed-opportunity": "Missed opportunity",
-  "lost-advantage": "Lost advantage",
-  "critical-moment": "Critical moment",
   "opening-mistake": "Opening mistake",
 };
 
-/**
- * Badge art per theme, from public/move-types.
- *
- * Four reuse Chess.com's move-classification art; "Lost advantage" and
- * "Critical moment" have their own, so no two themes share a badge and the list
- * can be read at a glance.
- */
+/** Badge art per theme, from public/move-types. */
 export const CATEGORY_ICON: Record<PuzzleCategory, string> = {
   blunder: "/move-types/blunder.png",
   mistake: "/move-types/mistake.png",
   "missed-opportunity": "/move-types/missed.png",
-  "lost-advantage": "/move-types/lost-advantage.png",
-  "critical-moment": "/move-types/critical-moment.png",
   "opening-mistake": "/move-types/book.png",
 };
 
@@ -109,7 +99,7 @@ export const solvePuzzles: SolvePuzzle[] = [
   },
   {
     id: "gbp-4",
-    category: "critical-moment",
+    category: "blunder",
     title: "Discovered Attack",
     fen: "4q1k1/6pp/8/8/4B3/8/5PPP/4R1K1 w - - 0 1",
     orientation: "white",
@@ -121,7 +111,7 @@ export const solvePuzzles: SolvePuzzle[] = [
       { from: "g8", to: "f8", san: "Kf8", side: "black", cp: 732, mate: null, isMate: false, fen: "4qk2/6pp/8/3B4/8/8/5PPP/4R1K1 w - - 2 2" },
       { from: "e1", to: "e8", san: "Rxe8+", side: "white", cp: 632, mate: null, isMate: false, fen: "4Rk2/6pp/8/3B4/8/8/5PPP/6K1 b - - 0 2" },
     ],
-    prompt: "A critical moment — you retreated with Bd3. One bishop move gives check and unveils your rook on the queen. Find it.",
+    prompt: "You retreated with Bd3 and threw the game away. One bishop move gives check and unveils your rook on the queen. Find it.",
     solvedLine: "Bd5+! The discovered check drives the king away, and Rxe8+ collects the queen — completely winning.",
     opponent: "Tengelic",
     opponentRating: 1141,
@@ -130,7 +120,7 @@ export const solvePuzzles: SolvePuzzle[] = [
   },
   {
     id: "gbp-5",
-    category: "lost-advantage",
+    category: "mistake",
     title: "Grabbed the Wrong Pawn",
     fen: "8/6pk/4p2p/3P1p2/5P1P/2B5/4K3/5r2 b - - 0 42",
     orientation: "black",
@@ -223,8 +213,6 @@ const CATEGORY_PLURAL: Record<PuzzleCategory, string> = {
   blunder: "Blunders",
   mistake: "Mistakes",
   "missed-opportunity": "Missed Opportunities",
-  "lost-advantage": "Lost Advantages",
-  "critical-moment": "Critical Moments",
   "opening-mistake": "Opening Mistakes",
 };
 

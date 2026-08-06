@@ -4,6 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import { notablePlySet, type ReviewModel, type ReviewPly } from "@/lib/pgn";
 import { moveTypeIcon, MOVE_COLOR, MOVE_LABEL } from "@/lib/assets";
+import { SanText } from "@/components/puzzles/san-text";
 import { cn } from "@/lib/utils";
 
 function MoveCell({
@@ -52,7 +53,7 @@ function MoveCell({
             : "text-ink-muted",
         )}
       >
-        {ply.san}
+        <SanText san={ply.san} color={ply.side} glyphClassName="text-[17px]" />
       </span>
     </button>
   );

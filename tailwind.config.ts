@@ -84,6 +84,8 @@ const config: Config = {
           "system-ui",
           "sans-serif",
         ],
+        // Figurine notation — see the @font-face in globals.css.
+        chess: ["Chess", "serif"],
       },
       borderRadius: {
         card: "8px",

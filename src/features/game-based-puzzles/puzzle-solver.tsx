@@ -246,7 +246,7 @@ function CorrectMove({ san, color }: { san: string; color: PieceColor }) {
         }
       >
         <p className="flex items-center gap-1.5 text-[17px] font-bold tracking-[-0.43px] text-brand">
-          <SanText san={san} color={color} glyph={28} />
+          <SanText san={san} color={color} glyphClassName="text-[23px]" />
           <span>is correct!</span>
         </p>
       </PanelRow>
@@ -384,7 +384,7 @@ function PuzzleBrief({
                   className="relative mt-1.5 inline-flex items-center font-display text-[19px] font-black leading-[19px]"
                   style={{ color: WRONG }}
                 >
-                  <SanText san={puzzle.played.san} color={userSide} glyph={26} />
+                  <SanText san={puzzle.played.san} color={userSide} glyphClassName="text-[25px]" />
                   {/* Struck through as one unit — a text-decoration would skip
                       the glyph and stop short of it. */}
                   <span
@@ -1274,16 +1274,20 @@ export function PuzzleSolver() {
                   >
                     <RotateCcw />
                   </button>
-                  <button
-                    type="button"
-                    disabled
+                  {/* Analysis is out of scope for the prototype, but a greyed
+                      button reads as broken in a walkthrough — so it keeps its
+                      normal weight and simply doesn't respond. */}
+                  <div
+                    role="button"
+                    aria-disabled="true"
+                    tabIndex={-1}
                     aria-label="Analyse with the engine (coming soon)"
                     title="Engine analysis — coming soon"
-                    className={cn(DARK_BTN, "w-14 shrink-0")}
+                    className={cn(DARK_BTN, "w-14 shrink-0 cursor-default")}
                   >
                     {/* Chess.com's game-analysis glyph, not a search magnifier. */}
                     <Image src={ICON.analysis} width={22} height={22} alt="" />
-                  </button>
+                  </div>
                   <button
                     type="button"
                     onClick={next}

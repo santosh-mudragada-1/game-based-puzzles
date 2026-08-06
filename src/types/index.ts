@@ -244,13 +244,17 @@ export type ReviewState = "reviewed-free" | "reviewed-platinum" | "empty";
  * a stronger move was available; the trainee replays it correctly.
  * ------------------------------------------------------------------ */
 
-/** The six mistake themes shown on the Game Based Puzzles start screen. */
+/**
+ * The mistake themes shown on the Game Based Puzzles start screen.
+ *
+ * Each one is a real Chess.com move classification — "lost advantage" and
+ * "critical moment" were dropped because the review never labels a move that
+ * way, so a theme built on them had nothing to mine from.
+ */
 export type PuzzleCategory =
   | "blunder"
   | "mistake"
   | "missed-opportunity"
-  | "lost-advantage"
-  | "critical-moment"
   | "opening-mistake";
 
 /** A concrete move on the board. */

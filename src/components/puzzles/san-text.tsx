@@ -1,52 +1,52 @@
-import Image from "next/image";
-import { pieceImage } from "@/lib/chess";
 import type { PieceColor } from "@/types";
 import { cn } from "@/lib/utils";
 
-/** SAN piece letters — anything else leads a pawn move ("e4", "exd5"). */
-const PIECE_LETTERS = "KQRBN";
+/**
+ * Letter → piece in the "Chess" figurine font (see the @font-face in
+ * globals.css). White pieces are the outlined glyphs, Black the solid ones.
+ */
+const PIECE_GLYPH: Record<PieceColor, Record<string, string>> = {
+  white: { K: "k", Q: "q", R: "r", B: "b", N: "h", P: "p" },
+  black: { K: "l", Q: "w", R: "t", B: "n", N: "j", P: "o" },
+};
 
 /**
- * A move written the way Chess.com writes it: the piece as a glyph, then the
- * square.
+ * A move in figurine notation, the way Chess.com writes it: the piece as a
+ * glyph, then the square. "Rd1" becomes ♖d1, "exd5" becomes ♙xd5.
  *
- * Chess.com sets that glyph in its proprietary "Chess" typeface, which isn't
- * ours to ship, so the piece is drawn from the board art already in /public and
- * sized to the surrounding text. Same reading, no licensing problem — and it
- * matches the pieces on the board beside it exactly.
+ * The glyph is a real font character, so it inherits the surrounding colour and
+ * scales with the text — no image to align.
  */
 export function SanText({
   san,
   color,
   className,
-  glyph = 24,
+  /** Glyph size; the font's pieces run small, so this is usually text + ~35%. */
+  glyphClassName,
 }: {
   san: string;
-  /** Side that played the move — picks the white or black glyph. */
+  /** Side that played the move — picks the outlined or solid glyph. */
   color: PieceColor;
   className?: string;
-  /** Glyph box in px; pick it to match the line height of the text. */
-  glyph?: number;
+  glyphClassName?: string;
 }) {
-  const head = san[0] ?? "";
-  const isPiece = PIECE_LETTERS.includes(head);
-  const base = isPiece ? head : "P";
-  const letter = color === "white" ? base : base.toLowerCase();
-  const rest = isPiece ? san.slice(1) : san;
+  // Only a leading piece letter takes a glyph. Pawn moves ("e4", "cxd5") and
+  // castling are written plainly, as they are everywhere else in chess.
+  const glyph = PIECE_GLYPH[color][san[0] ?? ""];
 
   return (
-    <span className={cn("inline-flex items-center gap-px", className)}>
-      <Image
-        src={pieceImage(letter)}
-        alt=""
-        width={glyph}
-        height={glyph}
-        // The art carries transparent margins where a font glyph would not, so
-        // it is set oversized and pulled back in to keep the line height honest.
-        className="-my-2 inline-block shrink-0"
-        style={{ width: glyph, height: glyph }}
-      />
-      <span>{rest}</span>
+    <span className={cn("inline-flex items-baseline gap-[1px]", className)}>
+      {glyph && (
+        <span
+          aria-hidden="true"
+          className={cn("font-chess font-normal leading-none", glyphClassName)}
+        >
+          {glyph}
+        </span>
+      )}
+      <span>{glyph ? san.slice(1) : san}</span>
+      {/* The glyph is decorative; screen readers get the plain notation. */}
+      <span className="sr-only">{san}</span>
     </span>
   );
 }

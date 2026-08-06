@@ -8,6 +8,23 @@
  * (no light mode in scope for this prototype).
  */
 
+/*
+ * "Chess" (Atech, 1991) — the figurine font Chess.com's notation is set in.
+ * Letters map to pieces: k/q/r/b/h/p are White, l/w/t/n/j/o are Black (see
+ * PIECE_GLYPH in san-text.tsx). Bundled so it renders for everyone, with
+ * `local()` first so a locally installed copy is preferred.
+ */
+@font-face {
+  font-family: "Chess";
+  src:
+    local("Chess Regular"),
+    local("Chess"),
+    url("/fonts/chess.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
 @layer base {
   :root {
     color-scheme: dark;
