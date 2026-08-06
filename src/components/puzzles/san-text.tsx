@@ -3,11 +3,16 @@ import { cn } from "@/lib/utils";
 
 /**
  * Letter → piece in the "Chess" figurine font (see the @font-face in
- * globals.css). White pieces are the outlined glyphs, Black the solid ones.
+ * globals.css).
+ *
+ * The font's own convention is outlines for White and solids for Black, which
+ * inverts on a dark panel: an outline reads as hollow, so the *solid* glyph is
+ * what looks like a white piece here. White therefore takes the filled set and
+ * Black the outlined one.
  */
 const PIECE_GLYPH: Record<PieceColor, Record<string, string>> = {
-  white: { K: "k", Q: "q", R: "r", B: "b", N: "h", P: "p" },
-  black: { K: "l", Q: "w", R: "t", B: "n", N: "j", P: "o" },
+  white: { K: "l", Q: "w", R: "t", B: "n", N: "j", P: "o" },
+  black: { K: "k", Q: "q", R: "r", B: "b", N: "h", P: "p" },
 };
 
 /**
