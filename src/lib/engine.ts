@@ -15,6 +15,11 @@ export interface EngineEval {
   depth: number;
   /** Engine's best move in UCI form ("e1e8"), once known. */
   bestMove: string | null;
+  /**
+   * User-positive score of the second-best line, when more than one was asked
+   * for. The gap between this and `cp` is what makes a move the *only* move.
+   */
+  secondCp: number | null;
 }
 
 export const EMPTY_EVAL: EngineEval = {
@@ -22,7 +27,26 @@ export const EMPTY_EVAL: EngineEval = {
   mate: null,
   depth: 0,
   bestMove: null,
+  secondCp: null,
 };
+
+/**
+ * How hard to think, mirroring Chess.com's own engine settings.
+ *
+ * `movetime` is the ceiling ("Maximum Time" in their panel) and `depth` the
+ * other end of it — Stockfish stops at whichever comes first, so a simple
+ * position finishes early instead of burning its whole allowance.
+ */
+export interface SearchLimits {
+  depth?: number;
+  /** Milliseconds. */
+  movetime?: number;
+  /** Lines to report ("Number of Lines"). */
+  multiPv?: number;
+}
+
+const asLimits = (l: number | SearchLimits): SearchLimits =>
+  typeof l === "number" ? { depth: l } : l;
 
 /** Active colour, from a FEN's second field. */
 export function fenSideToMove(fen: string): PieceColor {
@@ -53,6 +77,12 @@ function parseInfo(line: string, sign: number): Partial<EngineEval> | null {
     return { depth, mate: userMate, cp: userMate > 0 ? MATE_CP : -MATE_CP };
   }
   return { depth, mate: null, cp: clampCp(Number(cp![1]) * sign) };
+}
+
+/** Which line an `info` belongs to; 1 (the best) when MultiPV is off. */
+function pvIndex(line: string): number {
+  const m = /\bmultipv (\d+)/.exec(line);
+  return m ? Number(m[1]) : 1;
 }
 
 type LineHandler = (line: string) => void;
@@ -87,6 +117,8 @@ class StockfishEngine {
   private searching = false;
   /** Bumped per request; a handler stops emitting once it's been superseded. */
   private token = 0;
+  /** Lines currently configured, so the option is only re-sent when it changes. */
+  private multiPv = 1;
 
   /** True when the worker failed to boot (callers fall back to authored evals). */
   failed = false;
@@ -130,7 +162,7 @@ class StockfishEngine {
       await uciok;
 
       this.send("setoption name Hash value 32");
-      this.send("setoption name MultiPV value 1");
+      this.send(`setoption name MultiPV value ${this.multiPv}`);
 
       const readyok = this.expect((l) => l.startsWith("readyok"));
       this.send("isready");
@@ -164,13 +196,20 @@ class StockfishEngine {
   analyse(
     fen: string,
     userSide: PieceColor,
-    depth: number,
+    limits: number | SearchLimits,
     onUpdate?: (e: EngineEval) => void,
   ): Promise<EngineEval> {
+    const { depth, movetime, multiPv = 1 } = asLimits(limits);
+
     const run = async (): Promise<EngineEval> => {
       await this.start();
       const mine = ++this.token;
       const sign = fenSideToMove(fen) === userSide ? 1 : -1;
+
+      if (multiPv !== this.multiPv) {
+        this.multiPv = multiPv;
+        this.send(`setoption name MultiPV value ${multiPv}`);
+      }
 
       let latest: EngineEval = { ...EMPTY_EVAL };
       /** Whether any score at all came back for this position. */
@@ -183,9 +222,15 @@ class StockfishEngine {
             if (this.token !== mine) return;
             const parsed = parseInfo(line, sign);
             if (parsed) {
-              scored = true;
-              latest = { ...latest, ...parsed };
-              onUpdate?.(latest);
+              const pv = pvIndex(line);
+              if (pv === 1) {
+                scored = true;
+                latest = { ...latest, ...parsed };
+                onUpdate?.(latest);
+              } else if (pv === 2 && parsed.cp != null) {
+                // The runner-up, for spotting a move that was the only one.
+                latest = { ...latest, secondCp: parsed.cp };
+              }
             }
           } else if (line.startsWith("bestmove")) {
             // Always consume our *own* terminator, superseded or not. Bailing
@@ -207,7 +252,17 @@ class StockfishEngine {
 
       this.send(`position fen ${fen}`);
       this.searching = true;
-      this.send(`go depth ${depth}`);
+      // Both limits together where both are given: Stockfish honours whichever
+      // it reaches first, so an easy position stops early rather than sitting
+      // out its whole time allowance.
+      const go = [
+        "go",
+        depth != null ? `depth ${depth}` : "",
+        movetime != null ? `movetime ${movetime}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      this.send(go);
       await done;
       // Superseded mid-flight, or stopped before a single score landed. Note
       // `depth` is *not* a usable test: a position that is already checkmate is

@@ -4,6 +4,7 @@ import * as React from "react";
 import { Chess } from "chess.js";
 
 import { createEngine, EngineCancelled, type StockfishEngine } from "@/lib/engine";
+import { REVIEW_LIMITS } from "@/lib/engine-settings";
 import { accuracyFrom, classifyMove, type Classified } from "@/lib/classify";
 import {
   buildPuzzle,
@@ -17,14 +18,11 @@ import type { ArchivedGame } from "@/lib/chesscom";
 import type { PieceColor, SolvePuzzle } from "@/types";
 
 /**
- * Depth for the sweep that runs behind the archive.
- *
- * Twenty games is a couple of thousand positions; this pass exists to find the
- * moves that went wrong and to score them, and both survive a shallower search.
- * A game opened deliberately is analysed at the same depth, so the table and
- * the review page can never quote two numbers for one game.
+ * The sweep searches at the Game Review setting — "Fast (~1 sec)", three lines.
+ * A game opened deliberately gets the same budget, so the table and the review
+ * page can never quote two different numbers for one game.
  */
-const SWEEP_DEPTH = 14;
+const SWEEP_LIMITS = REVIEW_LIMITS;
 
 /**
  * Games auto-reviewed on connect: the most recent ones **Chess.com has already
@@ -37,6 +35,15 @@ const SWEEP_DEPTH = 14;
  * asking for a game review is itself a signal the member cared how it went.
  */
 const SWEEP_GAMES = 20;
+
+/**
+ * Games reviewed before the loading screen lets go.
+ *
+ * Enough to have puzzles ready and the top of the archive filled in the moment
+ * the dashboard appears; the other fifteen carry on behind it, so nobody waits
+ * on a game they haven't scrolled to yet.
+ */
+export const FIRST_BATCH = 5;
 
 /** Puzzles built for the day. */
 export const DAILY_PUZZLE_TARGET = 15;
@@ -75,6 +82,11 @@ export interface SweepState {
   /** Games it has finished. */
   done: number;
   running: boolean;
+  /**
+   * Games in the first batch — what the loading screen waits for. The rest of
+   * the sweep runs behind the dashboard.
+   */
+  firstBatch: number;
 }
 
 interface ReviewsValue {
@@ -92,8 +104,36 @@ interface ReviewsValue {
   requestPuzzles: (gameId: string) => void;
 }
 
-/** One unit of engine work. */
-type Job = { id: string; kind: "review" | "mine" };
+/**
+ * One unit of engine work. `forDay` marks a mining job that feeds the day's
+ * capped set rather than one game the member asked to drill.
+ */
+type Job = { id: string; kind: "review" | "mine"; forDay?: boolean };
+
+/** One Stockfish worker and the game it currently has. */
+interface Lane {
+  engine: StockfishEngine;
+  current: string | null;
+  /** Set when the member is waiting on something else and this lane should let go. */
+  abort: boolean;
+  busy: boolean;
+}
+
+/**
+ * How many games are read at once.
+ *
+ * A Stockfish WASM build is single-threaded, so one worker leaves most of the
+ * machine idle — the review is embarrassingly parallel across games and this is
+ * the difference between minutes and tens of seconds. Two cores are left for
+ * the page itself, so scrolling the archive while it works still feels right.
+ */
+function poolSize(): number {
+  const cores =
+    typeof navigator !== "undefined" ? (navigator.hardwareConcurrency ?? 4) : 4;
+  // One core left for the page, and never more than six workers — past that the
+  // lanes are only splitting the same CPU into thinner slices.
+  return Math.max(2, Math.min(6, cores - 1));
+}
 
 const Ctx = React.createContext<ReviewsValue | null>(null);
 
@@ -159,9 +199,10 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     target: 0,
     done: 0,
     running: false,
+    firstBatch: 0,
   });
 
-  const engineRef = React.useRef<StockfishEngine | null>(null);
+  const lanesRef = React.useRef<Lane[]>([]);
   const queueRef = React.useRef<Job[]>([]);
   const gamesRef = React.useRef(new Map<string, ArchivedGame>());
   /** Rows per finished game, readable without waiting for a render. */
@@ -171,12 +212,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
   /** Games already taken apart for puzzles, so Solve never redoes the work. */
   const minedRef = React.useRef(new Set<string>());
   const puzzleCountRef = React.useRef(0);
-  const pumpingRef = React.useRef(false);
   const aliveRef = React.useRef(true);
-  /** The game being analysed right now, if any. */
-  const currentRef = React.useRef<string | null>(null);
-  /** Set when a game the member is waiting on needs the worker. */
-  const abortRef = React.useRef(false);
   const reviewsRef = React.useRef(reviews);
   /** Games already queued for the sweep, as the archive streams in. */
   const plannedIdsRef = React.useRef(new Set<string>());
@@ -188,13 +224,21 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
-      engineRef.current?.cancel();
+      for (const lane of lanesRef.current) lane.engine.cancel();
     };
   }, []);
 
-  const engine = React.useCallback(() => {
-    if (!engineRef.current) engineRef.current = createEngine();
-    return engineRef.current;
+  /** The pool, created on first use — one Stockfish worker per lane. */
+  const lanes = React.useCallback((): Lane[] => {
+    if (lanesRef.current.length === 0) {
+      lanesRef.current = Array.from({ length: poolSize() }, () => ({
+        engine: createEngine(),
+        current: null,
+        abort: false,
+        busy: false,
+      }));
+    }
+    return lanesRef.current;
   }, []);
 
   /**
@@ -204,6 +248,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
   const analyse = React.useCallback(
     async (
       game: ArchivedGame,
+      lane: Lane,
     ): Promise<{ finished: boolean; rows: Classified[] }> => {
       let parsed: ReturnType<typeof positionsOf>;
       try {
@@ -223,17 +268,27 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
         [game.id]: { ...(r[game.id] ?? blank()), status: "running", done: 0, total },
       }));
 
-      const evals: { cp: number; mate: number | null; bestMove: string | null }[] =
-        [];
-      const eng = engine();
+      const evals: {
+        cp: number;
+        mate: number | null;
+        bestMove: string | null;
+        secondCp: number | null;
+      }[] = [];
       let rows: Classified[] = [];
 
       for (let i = 0; i < total; i++) {
-        if (!aliveRef.current || abortRef.current) return { finished: false, rows };
+        if (!aliveRef.current || lane.abort) return { finished: false, rows };
         try {
           // Scored from White's side throughout, so one polarity runs the game.
-          const e = await eng.analyse(fens[i], "white", SWEEP_DEPTH);
-          evals.push({ cp: e.cp, mate: e.mate, bestMove: e.bestMove });
+          const e = await lane.engine.analyse(fens[i], "white", SWEEP_LIMITS);
+          // `secondCp` comes from the third line the engine is now asked for;
+          // it is what tells an only-move apart from one of several good ones.
+          evals.push({
+            cp: e.cp,
+            mate: e.mate,
+            bestMove: e.bestMove,
+            secondCp: e.secondCp,
+          });
         } catch (err) {
           if (err instanceof EngineCancelled) return { finished: false, rows };
           setReviews((r) => ({
@@ -300,7 +355,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
 
       return { finished: true, rows };
     },
-    [engine],
+    [],
   );
 
   /**
@@ -311,7 +366,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
    * where they want that game's mistakes and no cap applies.
    */
   const mine = React.useCallback(
-    async (game: ArchivedGame, rows: Classified[], forDay = true) => {
+    async (game: ArchivedGame, rows: Classified[], lane: Lane, forDay = true) => {
       if (forDay && puzzleCountRef.current >= DAILY_PUZZLE_TARGET) return;
 
       const opponent = game.userSide === "white" ? game.black : game.white;
@@ -339,7 +394,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
 
         let puzzle: SolvePuzzle | null = null;
         try {
-          puzzle = await buildPuzzle(engine(), c);
+          puzzle = await buildPuzzle(lane.engine, c);
         } catch (err) {
           if (err instanceof EngineCancelled) return;
           continue;
@@ -372,61 +427,87 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
         return { ...g, [game.id]: merged };
       });
     },
-    [engine],
+    [],
   );
 
+  /**
+   * Keep every lane fed.
+   *
+   * Each lane pulls the next job off the shared queue and works it on its own
+   * worker, so the games are read several at a time rather than one after
+   * another. Called whenever work is added; lanes already running are left
+   * alone and will pick the new job up on their own.
+   */
   const pump = React.useCallback(() => {
-    if (pumpingRef.current) return;
-    pumpingRef.current = true;
     setSweep((s) => ({ ...s, running: true }));
 
-    void (async () => {
-      try {
-        while (aliveRef.current) {
-          const job = queueRef.current.shift();
-          if (!job) break;
-          const game = gamesRef.current.get(job.id);
-          if (!game) continue;
+    for (const lane of lanes()) {
+      if (lane.busy) continue;
+      lane.busy = true;
 
-          if (job.kind === "mine") {
-            if (minedRef.current.has(job.id)) continue;
-            const rows = rowsRef.current[job.id];
-            if (rows?.length) await mine(game, rows, false);
-            continue;
+      void (async () => {
+        try {
+          while (aliveRef.current) {
+            const job = queueRef.current.shift();
+            if (!job) break;
+            const game = gamesRef.current.get(job.id);
+            if (!game) continue;
+
+            if (job.kind === "mine") {
+              if (minedRef.current.has(job.id)) continue;
+              const rows = rowsRef.current[job.id];
+              if (rows?.length) await mine(game, rows, lane, job.forDay ?? false);
+              continue;
+            }
+
+            lane.abort = false;
+            lane.current = job.id;
+            const { finished, rows } = await analyse(game, lane);
+            lane.current = null;
+            if (!aliveRef.current) break;
+
+            if (!finished) {
+              // Handed this lane to a game the member is waiting on. Pick the
+              // interrupted one up again once that is out of the way.
+              if (
+                !queueRef.current.some(
+                  (j) => j.id === job.id && j.kind === "review",
+                )
+              ) {
+                queueRef.current.splice(1, 0, job);
+              }
+              continue;
+            }
+
+            setSweep((s) => ({ ...s, done: s.done + 1 }));
+            // Building puzzle lines is engine work too, and doing it here would
+            // take this lane off the review pass — the count the member is
+            // watching would crawl while a line nobody has asked for yet is
+            // worked out. It goes to the back of the queue instead, so every
+            // game is read first and the puzzles are built from what's left.
+            if (puzzleSetRef.current.has(job.id) && rows.length) {
+              queueRef.current.push({ id: job.id, kind: "mine", forDay: true });
+            }
           }
-
-          abortRef.current = false;
-          currentRef.current = job.id;
-          const { finished, rows } = await analyse(game);
-          currentRef.current = null;
-          if (!aliveRef.current) break;
-
-          if (!finished) {
-            // Handed the worker to a game the member is waiting on. Pick this
-            // one up again as soon as that is out of the way.
-            if (!queueRef.current.some((j) => j.id === job.id && j.kind === "review"))
-              queueRef.current.splice(1, 0, job);
-            continue;
+        } finally {
+          lane.busy = false;
+          lane.current = null;
+          if (aliveRef.current && lanesRef.current.every((l) => !l.busy)) {
+            setSweep((s) => ({ ...s, running: false }));
           }
-
-          setSweep((s) => ({ ...s, done: s.done + 1 }));
-          if (puzzleSetRef.current.has(job.id) && rows.length)
-            await mine(game, rows);
         }
-      } finally {
-        pumpingRef.current = false;
-        if (aliveRef.current) setSweep((s) => ({ ...s, running: false }));
-      }
-    })();
-  }, [analyse, mine]);
+      })();
+    }
+  }, [analyse, mine, lanes]);
 
-  /** Put a game at the head of the queue, taking the worker off the sweep. */
+  /** Put a game at the head of the queue, freeing a lane for it if need be. */
   const request = React.useCallback(
     (gameId: string) => {
       const held = reviewsRef.current[gameId];
       if (held?.status === "done" && held.source === "stockfish") return;
       if (!gamesRef.current.has(gameId)) return;
-      if (currentRef.current === gameId) return;
+      // Already being read — nothing to hurry along.
+      if (lanesRef.current.some((l) => l.current === gameId)) return;
 
       queueRef.current = [
         { id: gameId, kind: "review" },
@@ -440,13 +521,17 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
           : { ...r, [gameId]: { ...(r[gameId] ?? blank()), status: "queued" } },
       );
 
-      if (currentRef.current) {
-        abortRef.current = true;
-        engineRef.current?.cancel();
+      // If every lane is mid-game, take one off what it is doing — the member
+      // is waiting on this one and the interrupted game goes back in the queue.
+      const pool = lanes();
+      if (pool.every((l) => l.busy && l.current)) {
+        const victim = pool[0];
+        victim.abort = true;
+        victim.engine.cancel();
       }
       pump();
     },
-    [pump],
+    [pump, lanes],
   );
 
   /**
@@ -468,13 +553,18 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
           ];
       queueRef.current = [...head, ...rest];
 
-      if (!reviewed && currentRef.current && currentRef.current !== gameId) {
-        abortRef.current = true;
-        engineRef.current?.cancel();
+      // Free a lane if they are all mid-game and this one still needs reading.
+      const pool = lanes();
+      if (
+        !reviewed &&
+        pool.every((l) => l.busy && l.current && l.current !== gameId)
+      ) {
+        pool[0].abort = true;
+        pool[0].engine.cancel();
       }
       pump();
     },
-    [pump],
+    [pump, lanes],
   );
 
   // Rebuild when the connected account changes, and feed the sweep as the
@@ -484,8 +574,10 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     if (me !== accountRef.current) {
       accountRef.current = me;
       queueRef.current = [];
-      abortRef.current = true;
-      engineRef.current?.cancel();
+      for (const lane of lanesRef.current) {
+        lane.abort = true;
+        lane.engine.cancel();
+      }
       puzzleSetRef.current = new Set();
       minedRef.current = new Set();
       plannedIdsRef.current = new Set();
@@ -494,7 +586,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
       setReviews({});
       setPuzzles([]);
       setGamePuzzles({});
-      setSweep({ target: 0, done: 0, running: false });
+      setSweep({ target: 0, done: 0, running: false, firstBatch: 0 });
     }
 
     gamesRef.current = new Map(games.map((g) => [g.id, g]));
@@ -544,6 +636,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
       target: plannedIdsRef.current.size,
       done: s.done,
       running: true,
+      firstBatch: Math.min(FIRST_BATCH, plannedIdsRef.current.size),
     }));
     setReviews((r) => {
       const next = { ...r };

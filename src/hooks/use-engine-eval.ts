@@ -6,7 +6,9 @@ import {
   EngineCancelled,
   EMPTY_EVAL,
   type EngineEval,
+  type SearchLimits,
 } from "@/lib/engine";
+import { ANALYSIS_LIMITS } from "@/lib/engine-settings";
 import type { PieceColor } from "@/types";
 
 export interface EngineEvalState extends EngineEval {
@@ -17,8 +19,11 @@ export interface EngineEvalState extends EngineEval {
 }
 
 interface Options {
-  /** Target search depth. 16 is instant on the lite build and plenty here. */
-  depth?: number;
+  /**
+   * How hard to think. Defaults to the app's Analysis setting — Chess.com's
+   * "Maximum Time 5 sec", three lines — because this hook *is* the eval bar.
+   */
+  limits?: SearchLimits;
   /** Skip analysis entirely (e.g. no puzzle on screen). */
   enabled?: boolean;
   /** Authored eval to show before the engine's first answer, and if it fails. */
@@ -44,7 +49,7 @@ interface Options {
 export function useEngineEval(
   fen: string | null,
   userSide: PieceColor,
-  { depth = 16, enabled = true, fallback, resetKey }: Options = {},
+  { limits = ANALYSIS_LIMITS, enabled = true, fallback, resetKey }: Options = {},
 ): EngineEvalState {
   const fbCp = fallback?.cp ?? 0;
   const fbMate = fallback?.mate ?? null;
@@ -78,7 +83,7 @@ export function useEngineEval(
     setState((s) => ({ ...s, settled: false }));
 
     getEngine()
-      .analyse(fen, userSide, depth)
+      .analyse(fen, userSide, limits)
       .then((e) => {
         if (live) setState({ ...e, settled: true, failed: false });
       })
@@ -99,7 +104,7 @@ export function useEngineEval(
     return () => {
       live = false;
     };
-  }, [fen, userSide, depth, enabled]);
+  }, [fen, userSide, limits, enabled]);
 
   // Stop the worker when the screen goes away — otherwise it carries on burning
   // CPU on a board nobody is looking at.

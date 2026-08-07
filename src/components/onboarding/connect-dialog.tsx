@@ -78,14 +78,16 @@ export function ConnectDialog() {
 
   const fetching = status === "loading";
   /**
-   * The games are reviewed behind this screen, not after it.
+   * The first few games are reviewed behind this screen, not after it.
    *
-   * Reviewing starts as soon as the first months land, so by the time the
-   * archive is in most of it is already done — holding the screen for the tail
-   * of it costs a few seconds here and saves the member watching every row
-   * fill in one at a time on the other side.
+   * Reviewing starts as soon as the first months land, so it overlaps the
+   * download rather than following it. Only the first batch is waited on: that
+   * is enough to have puzzles ready and the top of the archive filled in, and
+   * the remaining fifteen finish behind the dashboard where nobody is watching
+   * a row they haven't scrolled to yet.
    */
-  const reviewing = sweep.target > 0 && sweep.done < sweep.target;
+  const firstBatch = sweep.firstBatch;
+  const reviewing = firstBatch > 0 && sweep.done < firstBatch;
   const busy = fetching || reviewing;
 
   // Open until an account is connected, or until it's waved away for this
@@ -146,7 +148,7 @@ export function ConnectDialog() {
       ? Math.round((progress.done / progress.total) * 50)
       : 6
     : reviewing
-      ? 50 + Math.round((sweep.done / sweep.target) * 50)
+      ? 50 + Math.round((sweep.done / firstBatch) * 50)
       : 100;
 
   return (
@@ -227,7 +229,7 @@ export function ConnectDialog() {
                           : progress.total > 0
                             ? `${progress.done}/${progress.total}`
                             : ""
-                        : `${sweep.done}/${sweep.target} games`}
+                        : `${Math.min(sweep.done, firstBatch)}/${firstBatch} games`}
                     </span>
                   </div>
                 </div>

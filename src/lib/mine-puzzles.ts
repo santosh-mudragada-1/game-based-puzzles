@@ -1,6 +1,7 @@
 import { Chess } from "chess.js";
 import type { StockfishEngine } from "@/lib/engine";
 import { MATE_CP } from "@/lib/engine";
+import { REVIEW_LIMITS } from "@/lib/engine-settings";
 import type { Classified } from "@/lib/classify";
 import type {
   MoveClassification,
@@ -21,8 +22,13 @@ import type {
  * clearly winning position.
  */
 
-/** How deep the solution line is searched. Deeper than the sweep: this is the answer. */
-const LINE_DEPTH = 12;
+/**
+ * The solution line is Game Review work, so it gets the Game Review budget —
+ * a second a move. Five moves of line is five seconds, which is affordable;
+ * the Analysis budget would be five times that for a line nobody is watching
+ * being built.
+ */
+const LINE_LIMITS = REVIEW_LIMITS;
 
 /** Half-moves of solution, at most. Odd, so the line finishes on the member's move. */
 const MAX_LINE = 5;
@@ -169,7 +175,7 @@ export async function buildPuzzle(
 
     // The engine's move for whoever is on move — the member's answer first, the
     // opponent's best defence after it.
-    const before = await engine.analyse(board.fen(), userSide, LINE_DEPTH);
+    const before = await engine.analyse(board.fen(), userSide, LINE_LIMITS);
     const uci = before.bestMove;
     if (!uci) break;
 
@@ -183,7 +189,7 @@ export async function buildPuzzle(
     // Score the position we landed in rather than reusing the score above: a
     // mate distance counts down as the mating side moves, and only the position
     // itself knows how far along that count it is.
-    const after = await engine.analyse(board.fen(), userSide, LINE_DEPTH);
+    const after = await engine.analyse(board.fen(), userSide, LINE_LIMITS);
     line.push({
       from: played.from,
       to: played.to,
