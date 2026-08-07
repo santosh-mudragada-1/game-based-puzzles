@@ -2,6 +2,7 @@ import { Chess } from "chess.js";
 import type { StockfishEngine } from "@/lib/engine";
 import { MATE_CP } from "@/lib/engine";
 import { REVIEW_LIMITS } from "@/lib/engine-settings";
+import { DEFAULT_DIFFICULTY, type Difficulty } from "@/lib/difficulty";
 import type { Classified } from "@/lib/classify";
 import type {
   MoveClassification,
@@ -29,9 +30,6 @@ import type {
  * being built.
  */
 const LINE_LIMITS = REVIEW_LIMITS;
-
-/** Half-moves of solution, at most. Odd, so the line finishes on the member's move. */
-const MAX_LINE = 5;
 
 /** Mistakes worth drilling, in the order we would rather show them. */
 export const MINEABLE: MoveClassification[] = ["blunder", "missed", "mistake"];
@@ -165,12 +163,17 @@ function copyFor(
 export async function buildPuzzle(
   engine: StockfishEngine,
   c: Candidate,
+  difficulty: Difficulty = DEFAULT_DIFFICULTY,
 ): Promise<SolvePuzzle | null> {
   const board = new Chess(c.fen);
   const line: PuzzleLinePly[] = [];
   const userSide = c.source.userSide;
+  /** The answer is a capture, a check or mate — something with a reason to look at it. */
+  let forcing = false;
+  /** How far clear of the runner-up the answer is; large means one right answer. */
+  let margin: number | null = null;
 
-  for (let k = 0; k < MAX_LINE; k++) {
+  for (let k = 0; k < difficulty.maxLine; k++) {
     if (board.isGameOver()) break;
 
     // The engine's move for whoever is on move — the member's answer first, the
@@ -185,6 +188,13 @@ export async function buildPuzzle(
       promotion: uci.length > 4 ? uci.slice(4, 5) : "q",
     });
     if (!played) break;
+
+    if (k === 0) {
+      forcing = Boolean(played.captured) || board.inCheck();
+      // MultiPV is on, so the second line's score comes back with the first.
+      // A big gap is the definition of a move with no equally good alternative.
+      margin = before.secondCp == null ? null : before.cp - before.secondCp;
+    }
 
     // Score the position we landed in rather than reusing the score above: a
     // mate distance counts down as the mating side moves, and only the position
@@ -213,12 +223,37 @@ export async function buildPuzzle(
   // The engine agreed with the move that was played — nothing to teach.
   if (first.from === c.played.from && first.to === c.played.to) return null;
 
+  // The answer has to be findable and it has to be the *only* answer. A quiet
+  // move nobody would look at, or one of two equally good ideas where the other
+  // is rejected, is the difference between a hard puzzle and an unfair one.
+  if (difficulty.forcing && !forcing && !first.isMate) return null;
+  if (
+    difficulty.onlyMargin != null &&
+    margin != null &&
+    margin < difficulty.onlyMargin
+  )
+    return null;
+
+  const mated = line[line.length - 1].isMate;
+  /**
+   * One move, unless it is a mate.
+   *
+   * A mate explains itself as it is played, so the follow-up is part of the
+   * pleasure. Anything else that needs a second move needs the solver to have
+   * seen three plies ahead to know why the first one was right — which is the
+   * thing that made these unsolvable.
+   */
+  if (difficulty.oneMove && !mated) line.length = 1;
+
   const last = line[line.length - 1];
   // The line ends on the member's move, so their moves in it are the mate count.
   const mateIn = last.isMate
     ? line.filter((p) => p.side === userSide).length
     : null;
-  const decisive = last.isMate || (last.cp >= 150 && last.cp - c.startCp >= 200);
+  const decisive =
+    last.isMate ||
+    (last.cp >= difficulty.minFinal &&
+      last.cp - c.startCp >= difficulty.minGain);
   if (!decisive) return null;
 
   const { title, prompt, solvedLine } = copyFor(c, line, mateIn);

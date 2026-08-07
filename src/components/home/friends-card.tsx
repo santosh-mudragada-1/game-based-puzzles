@@ -65,7 +65,7 @@ export function FriendsCard() {
                     />
                   )}
                 </div>
-                <span className="max-w-full truncate text-2xs font-semibold text-ink-muted">
+                <span className="w-full truncate text-center text-2xs font-semibold text-ink-muted">
                   {person.username}
                 </span>
               </>
@@ -73,15 +73,24 @@ export function FriendsCard() {
             return (
               <li
                 key={person.username}
-                className="flex flex-col items-center gap-1"
-                title={person.sub}
+                // Grid items size to their content by default, so a long
+                // username pushes the column wide and rides over its neighbour
+                // instead of ellipsing. min-w-0 lets the cell shrink and the
+                // truncation actually happen.
+                className="flex min-w-0 flex-col items-center gap-1"
+                title={
+                  person.sub ? `${person.username} — ${person.sub}` : person.username
+                }
               >
                 {person.url ? (
                   <a
                     href={person.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex min-w-0 flex-col items-center gap-1 transition-opacity hover:opacity-80"
+                    // w-full, not just min-w-0: a centred column flex item sizes
+                    // to its content, so without it the link itself grows past
+                    // the cell and takes the name with it.
+                    className="flex w-full min-w-0 flex-col items-center gap-1 transition-opacity hover:opacity-80"
                   >
                     {inner}
                   </a>

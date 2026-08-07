@@ -293,12 +293,25 @@ class StockfishEngine {
 
 export type { StockfishEngine };
 
-/** Lazily-created singleton — the worker boots on first analyse, not on import. */
-let instance: StockfishEngine | null = null;
+/** Lazily-created workers, one per channel — booted on first analyse, not on import. */
+const instances = new Map<string, StockfishEngine>();
 
-export function getEngine(): StockfishEngine {
-  if (!instance) instance = new StockfishEngine();
-  return instance;
+/**
+ * The shared worker for a channel of UI work.
+ *
+ * One engine runs one search at a time, so two things that need an answer at
+ * the same moment must not share it: the puzzle's eval bar asks about the
+ * position on the board *and* about the position the mistake threw away, and on
+ * one worker the second waits out the first — up to the full five-second
+ * Analysis budget — before either can be drawn.
+ */
+export function getEngine(channel = "ui"): StockfishEngine {
+  let engine = instances.get(channel);
+  if (!engine) {
+    engine = new StockfishEngine();
+    instances.set(channel, engine);
+  }
+  return engine;
 }
 
 /**

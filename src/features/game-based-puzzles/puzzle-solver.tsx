@@ -733,6 +733,7 @@ export function PuzzleSolver() {
     enabled: view === "run" && puzzle != null,
     fallback: authoredPeak,
     resetKey: puzzle?.id,
+    channel: "puzzle-peak",
   });
 
   // At the start the bar reads the position the played move led to (the board
@@ -754,6 +755,7 @@ export function PuzzleSolver() {
     enabled: view === "run" && puzzle != null,
     fallback: authoredCurrent,
     resetKey: puzzle?.id,
+    channel: "puzzle-bar",
   });
 
   // The hook holds the *previous* ply's score while the next one is searched,
@@ -765,10 +767,17 @@ export function PuzzleSolver() {
   const shownCp = vp === 0 || barSettled ? barEval.cp : authoredCurrent.cp;
   const shownMate = vp === 0 || barSettled ? barEval.mate : authoredCurrent.mate;
 
-  // The opening drop only plays once both numbers are real. Past the first move
-  // the bar just tracks the line, so it never holds again mid-puzzle.
-  const barReady =
-    vp > 0 || ((peakEval.settled || peakEval.failed) && barSettled);
+  /**
+   * The bar never waits for the engine.
+   *
+   * Both numbers are already known — mining verified them with Stockfish and
+   * stored them with the puzzle — so holding the bar at "what was available"
+   * until two fresh five-second searches come back meant the red band opened
+   * several seconds after the board did, on a puzzle the solver had already
+   * started thinking about. The live search still runs and still refines what
+   * is shown; it just no longer decides when the bar is allowed to be true.
+   */
+  const barReady = vp > 0 || puzzle != null;
 
   /**
    * How far into the queue this member may go. The counters still read against

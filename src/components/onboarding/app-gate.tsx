@@ -30,15 +30,27 @@ export function AppGate({ children }: { children: React.ReactNode }) {
 
   /** False until this route is known to be showable — the app stays unmounted. */
   const [open, setOpen] = React.useState(false);
+  /**
+   * Set once the app has been let through. Setup is a thing that happens on the
+   * way in, not a state to be sent back to: a sweep picking up a game played
+   * since the last visit, or the archive quietly refreshing behind a restored
+   * one, both make the app "busy" again — and neither is a reason to throw
+   * somebody out of the page they are on.
+   */
+  const openedRef = React.useRef(false);
 
   // Logging out takes the "just looking" pass with it, so setup comes back.
   React.useEffect(() => {
-    if (promptNonce > 0) write(SKIP_KEY, "");
+    if (promptNonce > 0) {
+      openedRef.current = false;
+      write(SKIP_KEY, "");
+    }
   }, [promptNonce]);
 
   React.useEffect(() => {
     if (onWelcome || !ready) return;
-    if (read(SKIP_KEY) || (profile && !busy)) {
+    if (openedRef.current || read(SKIP_KEY) || (profile && !busy)) {
+      openedRef.current = true;
       setOpen(true);
       return;
     }

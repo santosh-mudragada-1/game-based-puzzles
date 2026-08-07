@@ -36,6 +36,12 @@ interface Options {
    * instead of flicking through the authored number on its way to the real one.
    */
   resetKey?: string | number;
+  /**
+   * Which shared worker to think on. Two readings that are wanted at the same
+   * moment — the live position and the one that was available — need one each,
+   * or the second sits in a queue behind the first's whole time budget.
+   */
+  channel?: string;
 }
 
 /**
@@ -49,7 +55,13 @@ interface Options {
 export function useEngineEval(
   fen: string | null,
   userSide: PieceColor,
-  { limits = ANALYSIS_LIMITS, enabled = true, fallback, resetKey }: Options = {},
+  {
+    limits = ANALYSIS_LIMITS,
+    enabled = true,
+    fallback,
+    resetKey,
+    channel = "ui",
+  }: Options = {},
 ): EngineEvalState {
   const fbCp = fallback?.cp ?? 0;
   const fbMate = fallback?.mate ?? null;
@@ -82,7 +94,7 @@ export function useEngineEval(
     let live = true;
     setState((s) => ({ ...s, settled: false }));
 
-    getEngine()
+    getEngine(channel)
       .analyse(fen, userSide, limits)
       .then((e) => {
         if (live) setState({ ...e, settled: true, failed: false });
@@ -104,18 +116,14 @@ export function useEngineEval(
     return () => {
       live = false;
     };
-  }, [fen, userSide, limits, enabled]);
+  }, [fen, userSide, limits, enabled, channel]);
 
   // Stop the worker when the screen goes away — otherwise it carries on burning
   // CPU on a board nobody is looking at.
   //
   // Deliberately *not* done when the position changes: the next `analyse`
-  // already supersedes the previous search, and this hook runs twice on the
-  // page (the peak and the live bar) against one shared worker — so cancelling
-  // on every scrub also aborted the other hook's search, which then never
-  // restarted because its own position hadn't changed. That is what left the
-  // bar frozen on a stale number while stepping through a line.
-  React.useEffect(() => () => getEngine().cancel(), []);
+  // already supersedes the previous search.
+  React.useEffect(() => () => getEngine(channel).cancel(), [channel]);
 
   return state;
 }

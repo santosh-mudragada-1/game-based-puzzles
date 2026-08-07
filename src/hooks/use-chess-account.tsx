@@ -11,6 +11,70 @@ import type { ArchivedGame } from "@/lib/chesscom";
 const BATCH = 4;
 const STORAGE_KEY = "gbp:chesscom";
 
+/**
+ * The archive itself, kept between visits.
+ *
+ * Twenty-seven months of games is a few seconds of fetching every single time
+ * the tab is reloaded, and it is the same games — an archive only ever gains a
+ * game at the end. Holding it means a reload has the app on screen immediately
+ * and goes looking for what is new behind it, instead of putting a progress bar
+ * in front of somebody who was already here a minute ago.
+ */
+const ARCHIVE_KEY = "gbp:archive:v1";
+
+/**
+ * Games kept, newest first.
+ *
+ * The whole archive is thousands of PGNs and would crowd the origin's quota —
+ * taking the review cache down with it, which is the one that costs half a
+ * minute of engine time to rebuild. Two hundred games is the top of the history
+ * table, every opponent on the rail and far more than the sweep looks at; the
+ * rest arrive seconds later from the refresh, by which time nobody has scrolled
+ * that far.
+ */
+const CACHED_GAMES = 200;
+
+/** A hard ceiling even so, for an account whose games are unusually long. */
+const MAX_ARCHIVE_CHARS = 1_500_000;
+
+interface CachedArchive {
+  username: string;
+  savedAt: number;
+  profile: ChessProfile;
+  games: ArchivedGame[];
+}
+
+function loadArchive(username: string): CachedArchive | null {
+  try {
+    const raw = window.localStorage.getItem(ARCHIVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as CachedArchive;
+    if (data?.username !== username || !Array.isArray(data.games)) return null;
+    if (!data.games.length || !data.profile) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function saveArchive(a: CachedArchive) {
+  try {
+    const json = JSON.stringify({ ...a, games: a.games.slice(0, CACHED_GAMES) });
+    if (json.length > MAX_ARCHIVE_CHARS) {
+      window.localStorage.removeItem(ARCHIVE_KEY);
+      return;
+    }
+    window.localStorage.setItem(ARCHIVE_KEY, json);
+  } catch {
+    // Quota or private browsing — the next visit fetches as it always did.
+    try {
+      window.localStorage.removeItem(ARCHIVE_KEY);
+    } catch {
+      /* nothing further to try */
+    }
+  }
+}
+
 export interface RatingBucket {
   rating: number | null;
   best: number | null;
@@ -110,16 +174,26 @@ export function ChessAccountProvider({
   /** Guards against two loads racing (e.g. a re-connect mid-fetch). */
   const runId = React.useRef(0);
 
-  const connect = React.useCallback(async (username: string, silent = false) => {
+  /**
+   * Load an account.
+   *
+   * `background` is the refresh behind a restored archive: same fetch, but the
+   * app is already up and showing the stored games, so it must not be dropped
+   * into a loading state or emptied out while the new copy is on its way.
+   */
+  const connect = React.useCallback(
+    async (username: string, silent = false, background = false) => {
     setRestored(silent);
     const name = username.trim();
     if (!name) return;
 
     const run = ++runId.current;
-    setStatus("loading");
-    setError(null);
-    setGames([]);
-    setProgress({ done: 0, total: 0, games: 0, label: "Finding the account…" });
+    if (!background) {
+      setStatus("loading");
+      setError(null);
+      setGames([]);
+      setProgress({ done: 0, total: 0, games: 0, label: "Finding the account…" });
+    }
 
     try {
       const res = await fetch(
@@ -129,6 +203,9 @@ export function ChessAccountProvider({
       if (run !== runId.current) return;
 
       if (!res.ok) {
+        // A refresh that fails leaves the stored archive standing — it was
+        // good a moment ago, and it is better than an error over a working app.
+        if (background) return;
         setStatus("error");
         setError(data.error ?? "Could not load that account.");
         return;
@@ -166,12 +243,14 @@ export function ChessAccountProvider({
       const collected: ArchivedGame[] = [];
       for (let i = 0; i < archives.length; i += BATCH) {
         const slice = archives.slice(i, i + BATCH);
-        setProgress({
-          done: i,
-          total: archives.length,
-          games: collected.length,
-          label: archiveLabel(slice[0]),
-        });
+        if (!background) {
+          setProgress({
+            done: i,
+            total: archives.length,
+            games: collected.length,
+            label: archiveLabel(slice[0]),
+          });
+        }
 
         const months = await Promise.all(
           slice.map((a) =>
@@ -185,14 +264,22 @@ export function ChessAccountProvider({
           collected.push(...((m.games ?? []) as ArchivedGame[]));
 
         // Show them as they arrive — the list fills in rather than blinking on.
-        setGames(
-          [...collected].sort((a, b) => b.endTime - a.endTime),
-        );
+        // A refresh publishes once at the end instead: the app is already
+        // showing a complete archive and must not flicker down to a partial one.
+        if (!background) {
+          setGames([...collected].sort((a, b) => b.endTime - a.endTime));
+        }
       }
 
       if (run !== runId.current) return;
       collected.sort((a, b) => b.endTime - a.endTime);
       setGames(collected);
+      saveArchive({
+        username: found.username,
+        savedAt: Date.now(),
+        profile: found,
+        games: collected,
+      });
       setProgress({
         done: archives.length,
         total: archives.length,
@@ -201,11 +288,13 @@ export function ChessAccountProvider({
       });
       setStatus("ready");
     } catch {
-      if (run !== runId.current) return;
+      if (run !== runId.current || background) return;
       setStatus("error");
       setError("Could not reach Chess.com. Check your connection.");
     }
-  }, []);
+    },
+    [],
+  );
 
   const disconnect = React.useCallback(() => {
     runId.current++;
@@ -218,11 +307,28 @@ export function ChessAccountProvider({
     setPromptNonce((n) => n + 1);
   }, []);
 
-  // A remembered username reconnects itself on load.
+  /**
+   * A remembered username reconnects itself on load.
+   *
+   * With the archive already stored, that is instant: the games go up as they
+   * were and Chess.com is asked what has changed behind them. Only a first
+   * visit — or an account whose archive was too large to keep — waits.
+   */
   React.useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
     setReady(true);
-    if (saved) void connect(saved, true);
+    if (!saved) return;
+
+    const cached = loadArchive(saved);
+    if (!cached) {
+      void connect(saved, true);
+      return;
+    }
+    setProfile(cached.profile);
+    setGames(cached.games);
+    setRestored(true);
+    setStatus("ready");
+    void connect(saved, true, true);
   }, [connect]);
 
   const value = React.useMemo(

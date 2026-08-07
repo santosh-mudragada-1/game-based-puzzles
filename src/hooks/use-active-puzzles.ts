@@ -27,7 +27,10 @@ export interface ActivePuzzles {
 export function useActivePuzzles(): ActivePuzzles {
   const { puzzles, mining } = useReviews();
   const live = puzzles.length > 0;
-  const list = live ? puzzles : solvePuzzles;
+  // The day is fifteen puzzles. More than that can be mined — several games
+  // finish at once and each brings its own — but the extras stay in the games
+  // they came from rather than turning the day's set into a longer number.
+  const list = live ? puzzles.slice(0, DAILY_PUZZLE_TARGET) : solvePuzzles;
 
   const categories = (Object.keys(CATEGORY_PLURAL) as PuzzleCategory[])
     .map((category) => ({
@@ -41,7 +44,11 @@ export function useActivePuzzles(): ActivePuzzles {
     puzzles: list,
     live,
     mining,
-    target: live ? DAILY_PUZZLE_TARGET : list.length,
+    // Fifteen while there is still mining to come, so the day reads as the day
+    // it is aiming to be. Once the engine has stopped, the target is whatever it
+    // actually found — an archive that only had eleven tactics in it should say
+    // "11", not leave someone stuck at 11/15 with nothing left to solve.
+    target: live ? (mining ? DAILY_PUZZLE_TARGET : list.length) : list.length,
     categories,
   };
 }

@@ -13,7 +13,18 @@ import {
   type Candidate,
   type MineSource,
 } from "@/lib/mine-puzzles";
+import {
+  difficultyFor,
+  ratingOf,
+  relaxFrom,
+  rungsAbove,
+} from "@/lib/difficulty";
 import { useChessAccount } from "@/hooks/use-chess-account";
+import {
+  loadReviewCache,
+  saveReviewCache,
+  type CachedReview,
+} from "@/lib/review-cache";
 import type { ArchivedGame } from "@/lib/chesscom";
 import type { PieceColor, SolvePuzzle } from "@/types";
 
@@ -45,11 +56,15 @@ const SWEEP_GAMES = 20;
  */
 export const FIRST_BATCH = 5;
 
+/**
+ * Extra waves of twenty games taken on when the day comes up short, on top of
+ * the first. Three waves is sixty games — past that the archive is old enough
+ * that the mistakes in it are no longer the ones being made now.
+ */
+const MAX_WAVES = 2;
+
 /** Puzzles built for the day. */
 export const DAILY_PUZZLE_TARGET = 15;
-
-/** At most this many from one game, so a single collapse can't fill the set. */
-const PER_GAME = 2;
 
 /** When the member asks for one game's puzzles, they can have more of them. */
 const PER_GAME_ON_DEMAND = 4;
@@ -214,11 +229,30 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
   const puzzleCountRef = React.useRef(0);
   const aliveRef = React.useRef(true);
   const reviewsRef = React.useRef(reviews);
-  /** Games already queued for the sweep, as the archive streams in. */
+  /** Games the sweep need not look at again — queued now, or read last visit. */
   const plannedIdsRef = React.useRef(new Set<string>());
   /** The first few — mined immediately, so puzzles exist at the door. */
   const firstBatchRef = React.useRef(new Set<string>());
+  /**
+   * Games queued for the engine *this* visit. The loading screen waits on the
+   * first few of these, and only these — games restored from the cache are
+   * already done and must not be counted as something to wait for.
+   */
+  const queuedRef = React.useRef(0);
+  /** Set on restore: top the day's set up from cached rows, without re-reading. */
+  const topUpRef = React.useRef(false);
   const accountRef = React.useRef("");
+  /**
+   * How hard a puzzle is allowed to be, from the connected account's rating.
+   * Read through a ref because mining runs inside long-lived lane loops that
+   * must not be rebuilt every time the profile object changes identity.
+   */
+  const difficultyRef = React.useRef(difficultyFor(null));
+  difficultyRef.current = difficultyFor(ratingOf(profile));
+  /** Relaxed passes already run over the reviewed games; 0 is the strict one. */
+  const relaxStageRef = React.useRef(0);
+  /** Extra twenty-game waves taken on to fill a short day. */
+  const wavesRef = React.useRef(0);
 
   reviewsRef.current = reviews;
 
@@ -411,10 +445,15 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
       };
 
       // Worst first, and only the worst handful — building a line is engine work.
-      const limit = forDay ? PER_GAME : PER_GAME_ON_DEMAND;
+      // How deep to look depends on the difficulty rules: the stricter they are,
+      // the more of a game has to be examined to find something that passes.
+      const d = forDay
+        ? relaxFrom(difficultyRef.current, relaxStageRef.current)
+        : difficultyRef.current;
+      const limit = forDay ? d.keepPerGame : PER_GAME_ON_DEMAND;
       const candidates: Candidate[] = findCandidates(src, rows).slice(
         0,
-        forDay ? 5 : 8,
+        forDay ? d.tryPerGame : 10,
       );
       let made = 0;
       const built: SolvePuzzle[] = [];
@@ -425,7 +464,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
 
         let puzzle: SolvePuzzle | null = null;
         try {
-          puzzle = await buildPuzzle(lane.engine, c);
+          puzzle = await buildPuzzle(lane.engine, c, d);
         } catch (err) {
           if (err instanceof EngineCancelled) return;
           continue;
@@ -437,7 +476,15 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
         built.push(one);
         if (forDay) {
           puzzleCountRef.current++;
-          setPuzzles((p) => (p.some((x) => x.id === one.id) ? p : [...p, one]));
+          // Several lanes finish at once, so the count can be read as under the
+          // target by two of them together and overshoot it. The set itself is
+          // the last word on how long the day is; the extras stay filed under
+          // the games they came from.
+          setPuzzles((p) =>
+            p.length >= DAILY_PUZZLE_TARGET || p.some((x) => x.id === one.id)
+              ? p
+              : [...p, one],
+          );
         }
       }
 
@@ -469,6 +516,42 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
    * another. Called whenever work is added; lanes already running are left
    * alone and will pick the new job up on their own.
    */
+  /**
+   * Take in the next twenty already-reviewed games.
+   *
+   * Reached when the day has come up short. Twenty games do not always hold
+   * fifteen findable tactics, and the answer to that is more games rather than
+   * looser rules: another wave at the same standard adds puzzles of the same
+   * difficulty, where relaxing adds harder ones. Only when the archive runs out
+   * of reviewed games does the standard move. Returns false when there is
+   * nothing left to take.
+   */
+  const extendSweep = React.useCallback((): boolean => {
+    if (wavesRef.current >= MAX_WAVES) return false;
+    const next = [...gamesRef.current.values()]
+      .filter((g) => g.accuracies && !plannedIdsRef.current.has(g.id))
+      .sort((a, b) => b.endTime - a.endTime)
+      .slice(0, SWEEP_GAMES);
+    if (next.length === 0) return false;
+
+    wavesRef.current++;
+    for (const g of next) {
+      plannedIdsRef.current.add(g.id);
+      puzzleSetRef.current.add(g.id);
+      queueRef.current.push({ id: g.id, kind: "review" });
+    }
+    setSweep((s) => ({ ...s, target: s.target + next.length, running: true }));
+    setReviews((r) => {
+      const out = { ...r };
+      for (const g of next) out[g.id] = { ...(out[g.id] ?? blank()), status: "queued" };
+      return out;
+    });
+    return true;
+  }, []);
+
+  /** Lets a lane restart the pool from inside its own loop, without a cycle. */
+  const pumpRef = React.useRef<() => void>(() => {});
+
   const pump = React.useCallback(() => {
     setSweep((s) => ({ ...s, running: true }));
 
@@ -531,12 +614,37 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
           lane.busy = false;
           lane.current = null;
           if (aliveRef.current && lanesRef.current.every((l) => !l.busy)) {
+            // Everything queued is done. A short day is worth more work: first
+            // more games at the same standard, and only when the archive has no
+            // more reviewed games to give, the same games judged a rung looser.
+            if (puzzleCountRef.current < DAILY_PUZZLE_TARGET) {
+              if (extendSweep()) {
+                pumpRef.current();
+                return;
+              }
+              if (
+                relaxStageRef.current < rungsAbove(difficultyRef.current) &&
+                puzzleSetRef.current.size > 0
+              ) {
+                relaxStageRef.current++;
+                for (const id of puzzleSetRef.current) {
+                  if (rowsRef.current[id]?.length)
+                    queueRef.current.push({ id, kind: "mine", forDay: true });
+                }
+                if (queueRef.current.length) {
+                  pumpRef.current();
+                  return;
+                }
+              }
+            }
             setSweep((s) => ({ ...s, running: false }));
           }
         }
       })();
     }
-  }, [analyse, mine, lanes]);
+  }, [analyse, mine, lanes, extendSweep]);
+
+  pumpRef.current = pump;
 
   /** Put a game at the head of the queue, freeing a lane for it if need be. */
   const request = React.useCallback(
@@ -620,12 +728,49 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
       minedRef.current = new Set();
       plannedIdsRef.current = new Set();
       firstBatchRef.current = new Set();
+      queuedRef.current = 0;
+      relaxStageRef.current = 0;
+      wavesRef.current = 0;
       puzzleCountRef.current = 0;
       rowsRef.current = {};
       setReviews({});
       setPuzzles([]);
       setGamePuzzles({});
       setSweep({ target: 0, done: 0, running: false, firstBatch: 0 });
+
+      /*
+        Pick up where the last visit left off. Every restored game goes into
+        `plannedIds`, which is what the sweep filters against — so those games
+        are never queued, the loading screen has nothing to wait for, and the
+        member comes back to the same fifteen puzzles rather than fifteen
+        freshly-mined ones in a set they were halfway through.
+      */
+      const cached = me ? loadReviewCache(me) : null;
+      if (cached) {
+        const restored: Record<string, GameReview> = {};
+        for (const [id, r] of Object.entries(cached.reviews)) {
+          rowsRef.current[id] = r.rows;
+          plannedIdsRef.current.add(id);
+          puzzleSetRef.current.add(id);
+          restored[id] = {
+            status: "done",
+            source: "stockfish",
+            accuracy: r.accuracy,
+            rows: r.rows,
+            done: r.total,
+            total: r.total,
+            mistakes: r.mistakes,
+          };
+        }
+        for (const id of cached.mined) minedRef.current.add(id);
+        puzzleCountRef.current = cached.puzzles.length;
+        setReviews(restored);
+        setPuzzles(cached.puzzles);
+        setGamePuzzles(cached.gamePuzzles);
+        // A visit that was interrupted mid-sweep can come back short of a full
+        // day. The rows are already here, so the rest is mining, not reviewing.
+        topUpRef.current = cached.puzzles.length < DAILY_PUZZLE_TARGET;
+      }
     }
 
     gamesRef.current = new Map(games.map((g) => [g.id, g]));
@@ -651,6 +796,24 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
 
     if (!me || games.length === 0) return;
 
+    // Restored short of a full day: mine the games already read rather than
+    // reading anything again. Only possible once the archive has arrived, since
+    // a job needs its game.
+    if (topUpRef.current) {
+      topUpRef.current = false;
+      const ready = Object.keys(rowsRef.current).filter(
+        (id) =>
+          gamesRef.current.has(id) &&
+          rowsRef.current[id]?.length &&
+          !minedRef.current.has(id),
+      );
+      if (ready.length) {
+        for (const id of ready)
+          queueRef.current.push({ id, kind: "mine", forDay: true });
+        pump();
+      }
+    }
+
     /**
      * Start reviewing while the archive is still downloading rather than after.
      *
@@ -666,17 +829,18 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     if (set.length === 0) return;
 
     for (const g of set) {
-      if (plannedIdsRef.current.size < FIRST_BATCH) firstBatchRef.current.add(g.id);
+      if (queuedRef.current < FIRST_BATCH) firstBatchRef.current.add(g.id);
+      queuedRef.current++;
       plannedIdsRef.current.add(g.id);
       puzzleSetRef.current.add(g.id);
       queueRef.current.push({ id: g.id, kind: "review" });
     }
 
     setSweep((s) => ({
-      target: plannedIdsRef.current.size,
+      target: queuedRef.current,
       done: s.done,
       running: true,
-      firstBatch: Math.min(FIRST_BATCH, plannedIdsRef.current.size),
+      firstBatch: Math.min(FIRST_BATCH, queuedRef.current),
     }));
     setReviews((r) => {
       const next = { ...r };
@@ -685,6 +849,53 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     });
     pump();
   }, [games, profile, status, pump]);
+
+  /**
+   * Keep the cache up to date with whatever has been worked out so far.
+   *
+   * Only our own finished reviews are worth storing: Chess.com's accuracies
+   * come back with the archive for nothing, and a half-read game would restore
+   * as done with a partial move list. Debounced, because a sweep publishes
+   * every few positions and this is a few hundred kilobytes of JSON.
+   */
+  const snapshotRef = React.useRef<() => void>(() => {});
+  snapshotRef.current = () => {
+    const me = accountRef.current;
+    if (!me) return;
+    const keep: Record<string, CachedReview> = {};
+    for (const [id, r] of Object.entries(reviews)) {
+      if (r.status !== "done" || r.source !== "stockfish" || !r.rows.length)
+        continue;
+      keep[id] = {
+        accuracy: r.accuracy,
+        rows: r.rows,
+        total: r.total,
+        mistakes: r.mistakes,
+      };
+    }
+    if (Object.keys(keep).length === 0) return;
+    saveReviewCache({
+      username: me,
+      savedAt: Date.now(),
+      reviews: keep,
+      puzzles,
+      gamePuzzles,
+      mined: [...minedRef.current],
+    });
+  };
+
+  React.useEffect(() => {
+    const t = setTimeout(() => snapshotRef.current(), 1200);
+    return () => clearTimeout(t);
+  }, [reviews, puzzles, gamePuzzles]);
+
+  // A reload mid-sweep would otherwise throw away everything since the last
+  // debounce — exactly the moment the cache is worth the most.
+  React.useEffect(() => {
+    const flush = () => snapshotRef.current();
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, []);
 
   const value = React.useMemo<ReviewsValue>(
     () => ({
