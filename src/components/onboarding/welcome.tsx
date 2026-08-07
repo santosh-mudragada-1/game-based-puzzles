@@ -8,7 +8,7 @@ import { ArrowRight } from "lucide-react";
 import { useChessAccount } from "@/hooks/use-chess-account";
 import { useReviews } from "@/hooks/use-reviews";
 import { Tour } from "@/components/onboarding/tour";
-import { GAME_ICON } from "@/lib/assets";
+import { Logo } from "@/components/shared/logo";
 import { pieceImage } from "@/lib/chess";
 import { cn } from "@/lib/utils";
 
@@ -190,13 +190,8 @@ export function Welcome({ children }: { children: React.ReactNode }) {
               transition={{ type: "spring", stiffness: 380, damping: 30 }}
             >
               <div className="px-7 pb-7 pt-8">
-                <Image
-                  src={GAME_ICON.gameBasedPuzzles}
-                  width={44}
-                  height={44}
-                  alt=""
-                />
-                <h2 className="mt-3.5 font-display text-[26px] font-black leading-none text-white">
+                <Logo height={26} />
+                <h2 className="mt-4 font-display text-[26px] font-black leading-none text-white">
                   {fetching
                     ? "Reading your games"
                     : reviewing
@@ -241,11 +236,8 @@ export function Welcome({ children }: { children: React.ReactNode }) {
                     </div>
 
                     {/* Say the quiet part out loud: this is real engine work. */}
-                    <p className="mt-5 rounded-[8px] bg-black/25 px-3.5 py-3 text-[12.5px] leading-snug text-ink-soft">
-                      This can take a minute or two — every position of every
-                      game goes through Stockfish. It only happens once, and
-                      there&apos;s an explanation of how it all works waiting on
-                      the other side.
+                    <p className="mt-5 rounded-[8px] bg-black/25 px-3.5 py-3 text-center text-[12.5px] font-semibold text-ink-soft">
+                      This can take a minute or two
                     </p>
                   </div>
                 ) : (

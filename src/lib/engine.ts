@@ -175,6 +175,18 @@ class StockfishEngine {
   }
 
   /**
+   * Boot the worker and finish the UCI handshake without asking anything of it.
+   *
+   * Downloading and compiling the WASM, then handshaking, is a second or two
+   * that would otherwise land on the first position of the first game — right
+   * when someone is watching a progress bar. Doing it while they are still
+   * typing costs nothing and is invisible.
+   */
+  warmUp(): Promise<void> {
+    return this.start().catch(() => undefined);
+  }
+
+  /**
    * Abandon whatever is being searched.
    *
    * Bumping the token orphans the in-flight handler so its result is discarded,

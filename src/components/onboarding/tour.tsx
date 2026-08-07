@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Check } from "lucide-react";
+import { ArrowRight, X } from "lucide-react";
 
 import { MiniBoard } from "@/components/board/mini-board";
 import { MoveBadge } from "@/components/shared/move-badge";
@@ -40,22 +40,7 @@ function PlayStep() {
     return () => clearInterval(t);
   }, []);
 
-  return (
-    <div className="relative">
-      <MiniBoard fen={GAME[i]} orientation="white" className="shadow-raised" />
-      {/* A clock ticking down, so it reads as a game rather than a diagram. */}
-      <motion.div
-        className="absolute -bottom-3 -right-3 rounded-[8px] bg-surface-sunken px-3 py-1.5 shadow-pop"
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.3, ease: EASE }}
-      >
-        <span className="font-display text-[15px] font-black tabular-nums text-white">
-          14:5{9 - (i % 10)}
-        </span>
-      </motion.div>
-    </div>
-  );
+  return <MiniBoard fen={GAME[i]} orientation="white" className="shadow-raised" />;
 }
 
 /* -------------------------------------------------------- 2 · We review it */
@@ -123,52 +108,104 @@ function ReviewStep() {
 
 /* ------------------------------------------------- 3 · Mistakes → puzzles */
 
-const BLUNDER_FEN =
-  "r1bqk2r/pppp1ppp/2n2n2/1B2N3/4P3/8/PPPP1PPP/RNBQK2R b KQkq - 0 5";
+/**
+ * The Italian, all developed, Black to move — and Black grabs the e4 pawn with
+ * the knight, which simply loses it. Legible at a glance: a natural, greedy
+ * capture that hangs a piece.
+ */
+const BEFORE_FEN =
+  "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R b KQkq - 6 5";
+const AFTER_FEN =
+  "r1bqk2r/pppp1ppp/2n5/2b1p3/2B1n3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 6";
 
+/** Top-left corner of a square, as a percentage of the board. */
+function squarePos(square: string, orientation: "white" | "black") {
+  const file = square.charCodeAt(0) - 97;
+  const rank = Number(square[1]);
+  const col = orientation === "white" ? file : 7 - file;
+  const row = orientation === "white" ? 8 - rank : rank - 1;
+  return { left: `${col * 12.5}%`, top: `${row * 12.5}%` };
+}
+
+/**
+ * The whole feature in one loop: a move is played, it turns out to be the
+ * mistake, the board takes it back, and the same position is handed over as a
+ * question. The shake is the moment it lands — the board flinching is what
+ * makes "that was wrong" register before any label has been read.
+ */
 function PuzzleStep() {
+  // 0 — before the move · 1 — the mistake lands · 2 — rewound, over to you
   const [beat, setBeat] = React.useState(0);
   React.useEffect(() => {
-    const t = setInterval(() => setBeat((b) => (b + 1) % 3), 1400);
-    return () => clearInterval(t);
-  }, []);
+    const timings = [1200, 1900, 2400];
+    const t = setTimeout(() => setBeat((b) => (b + 1) % 3), timings[beat]);
+    return () => clearTimeout(t);
+  }, [beat]);
+
+  const wrong = squarePos("e4", "black");
 
   return (
     <div className="relative">
-      <MiniBoard
-        fen={BLUNDER_FEN}
-        orientation="black"
-        highlight={beat === 0 ? ["e5"] : undefined}
-        hint={beat >= 1 ? ["c6", "e5"] : undefined}
-        className="shadow-raised"
-      />
+      <motion.div
+        // The flinch, once, exactly as the wrong move arrives.
+        animate={beat === 1 ? { x: [0, -7, 6, -4, 3, 0] } : { x: 0 }}
+        transition={{ duration: 0.42, ease: "easeInOut" }}
+      >
+        <MiniBoard
+          fen={beat === 1 ? AFTER_FEN : BEFORE_FEN}
+          orientation="black"
+          highlight={beat === 1 ? ["f6", "e4"] : undefined}
+          hint={beat === 2 ? ["e4"] : undefined}
+          className="shadow-raised"
+        />
+      </motion.div>
 
-      <AnimatePresence mode="wait">
-        {beat === 0 ? (
+      {/* The cross stays on the square the piece went to, through the rewind —
+          that square is the mistake, and it is what the question is about. */}
+      <AnimatePresence>
+        {beat >= 1 && (
           <motion.div
-            key="mistake"
-            className="absolute -right-3 -top-3 flex items-center gap-1.5 rounded-[8px] bg-[#ca3431] px-3 py-1.5 shadow-pop"
-            initial={{ opacity: 0, scale: 0.8, y: -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 460, damping: 26 }}
+            className="pointer-events-none absolute grid size-[12.5%] place-items-center"
+            style={wrong}
+            initial={{ opacity: 0, scale: 1.6 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ type: "spring", stiffness: 520, damping: 22 }}
           >
-            <Image src="/move-types/blunder.png" width={16} height={16} alt="" />
-            <span className="text-[13px] font-bold text-white">Blunder</span>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="puzzle"
-            className="absolute -right-3 -top-3 flex items-center gap-1.5 rounded-[8px] bg-brand px-3 py-1.5 shadow-pop"
-            initial={{ opacity: 0, scale: 0.8, y: -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 460, damping: 26 }}
-          >
-            <Check className="size-4 text-white" strokeWidth={3} />
-            <span className="text-[13px] font-bold text-white">Your puzzle</span>
+            <span className="grid size-[62%] place-items-center rounded-full bg-[#ca3431] shadow-[0_2px_6px_rgba(0,0,0,0.45)]">
+              <X className="size-[70%] text-white" strokeWidth={4} />
+            </span>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={beat === 2 ? "ask" : beat === 1 ? "wrong" : "playing"}
+          className={cn(
+            "absolute -right-3 -top-3 flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 shadow-pop",
+            beat === 1 ? "bg-[#ca3431]" : beat === 2 ? "bg-brand" : "bg-surface-sunken",
+          )}
+          initial={{ opacity: 0, scale: 0.8, y: -4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 460, damping: 26 }}
+        >
+          {beat === 1 ? (
+            <>
+              <Image src="/move-types/blunder.png" width={16} height={16} alt="" />
+              <span className="text-[13px] font-bold text-white">Blunder</span>
+            </>
+          ) : beat === 2 ? (
+            <span className="text-[13px] font-bold text-white">
+              Find the best move
+            </span>
+          ) : (
+            <span className="text-[13px] font-bold text-ink-muted">
+              Your move
+            </span>
+          )}
+        </motion.div>
       </AnimatePresence>
     </div>
   );
@@ -195,7 +232,7 @@ const STEPS = [
     key: "puzzles",
     eyebrow: "Step three",
     title: "Your mistakes become puzzles",
-    body: "The board rewinds to the moment before each mistake and hands it back to you. Same position, same pieces — this time you find the move you missed.",
+    body: "The board takes the mistake back and hands the position over as a question. Same pieces, same moment — this time you find the move you missed.",
     art: <PuzzleStep />,
   },
 ] as const;

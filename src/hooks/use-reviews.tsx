@@ -244,6 +244,18 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /**
+   * Get the engines up while the member is still typing their username.
+   *
+   * Nothing can be reviewed before we know whose games they are, but the
+   * workers can be downloaded, compiled and handshaken — a second or two per
+   * lane that would otherwise be spent with a progress bar on screen. By the
+   * time the first month lands they are sitting idle and ready.
+   */
+  React.useEffect(() => {
+    for (const lane of lanes()) void lane.engine.warmUp();
+  }, [lanes]);
+
+  /**
    * Analyse one game end to end, publishing rows as they land so a game being
    * watched fills in rather than appearing all at once.
    */
