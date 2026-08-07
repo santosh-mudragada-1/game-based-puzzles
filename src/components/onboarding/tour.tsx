@@ -3,11 +3,12 @@
 import * as React from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, X } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { MiniBoard } from "@/components/board/mini-board";
 import { MoveBadge } from "@/components/shared/move-badge";
 import { GAME_ICON } from "@/lib/assets";
+import { pieceImage } from "@/lib/chess";
 import { cn } from "@/lib/utils";
 
 /**
@@ -154,27 +155,49 @@ function PuzzleStep() {
         <MiniBoard
           fen={beat === 1 ? AFTER_FEN : BEFORE_FEN}
           orientation="black"
-          highlight={beat === 1 ? ["f6", "e4"] : undefined}
-          hint={beat === 2 ? ["e4"] : undefined}
+          // The move that was played stays lit through the rewind, the same way
+          // the puzzle itself opens: from-square, to-square, and the cross.
+          highlight={beat >= 1 ? ["f6", "e4"] : undefined}
           className="shadow-raised"
         />
       </motion.div>
 
-      {/* The cross stays on the square the piece went to, through the rewind —
-          that square is the mistake, and it is what the question is about. */}
+      {/* Exactly what a puzzle shows for a rejected move: the piece greyed out
+          where it went, struck through in red. It stays on that square through
+          the rewind — that square is the mistake, and it is what the question
+          is about. Once the board is back, the knight is only a ghost, so it is
+          drawn in rather than left to the position. */}
       <AnimatePresence>
         {beat >= 1 && (
           <motion.div
-            className="pointer-events-none absolute grid size-[12.5%] place-items-center"
+            className="pointer-events-none absolute size-[12.5%]"
             style={wrong}
-            initial={{ opacity: 0, scale: 1.6 }}
+            initial={{ opacity: 0, scale: 1.3 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ type: "spring", stiffness: 520, damping: 22 }}
           >
-            <span className="grid size-[62%] place-items-center rounded-full bg-[#ca3431] shadow-[0_2px_6px_rgba(0,0,0,0.45)]">
-              <X className="size-[70%] text-white" strokeWidth={4} />
-            </span>
+            {beat === 2 && (
+              <Image
+                src={pieceImage("n")}
+                alt=""
+                fill
+                sizes="40px"
+                className="object-contain p-[5%] opacity-55 grayscale drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+              />
+            )}
+            <svg
+              viewBox="0 0 100 100"
+              className="absolute inset-0 size-full"
+              aria-hidden="true"
+            >
+              <path
+                d="M30 30 L70 70 M70 30 L30 70"
+                stroke="#d0453f"
+                strokeWidth="8"
+                strokeLinecap="round"
+              />
+            </svg>
           </motion.div>
         )}
       </AnimatePresence>

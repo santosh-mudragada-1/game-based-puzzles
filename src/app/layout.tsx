@@ -5,7 +5,7 @@ import { PlanProvider } from "@/hooks/use-plan";
 import { PuzzleProgressProvider } from "@/hooks/use-puzzle-progress";
 import { ChessAccountProvider } from "@/hooks/use-chess-account";
 import { ReviewsProvider } from "@/hooks/use-reviews";
-import { Welcome } from "@/components/onboarding/welcome";
+import { AppGate } from "@/components/onboarding/app-gate";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -42,12 +42,12 @@ export default function RootLayout({
             <PlanProvider>
               <PuzzleProgressProvider>
                 {/*
-                  The username, the wait and the explanation. It holds the app
-                  back until the games are fetched and reviewed, so no
-                  half-loaded dashboard shows through, and sits inside the
-                  provider doing the reviewing because it reports its progress.
+                  Nothing of the app renders until there is a real account
+                  behind it — anyone else is sent to /welcome for the username,
+                  the wait and the explanation. It sits inside the provider
+                  doing the reviewing because it waits on its progress.
                 */}
-                <Welcome>{children}</Welcome>
+                <AppGate>{children}</AppGate>
               </PuzzleProgressProvider>
             </PlanProvider>
           </ReviewsProvider>

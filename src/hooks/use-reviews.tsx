@@ -250,9 +250,26 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
    * workers can be downloaded, compiled and handshaken — a second or two per
    * lane that would otherwise be spent with a progress bar on screen. By the
    * time the first month lands they are sitting idle and ready.
+   *
+   * The first lane goes up alone. The build is 7 MB of WebAssembly, and six
+   * lanes started together on a cold cache is six simultaneous downloads of it
+   * plus six compiles — forty megabytes and every core busy, on the one screen
+   * where all anyone is doing is typing into a box. Once the first has been
+   * through, the file is in the HTTP cache and the rest can come up together
+   * for nothing.
    */
   React.useEffect(() => {
-    for (const lane of lanes()) void lane.engine.warmUp();
+    let cancelled = false;
+    void (async () => {
+      const [first, ...rest] = lanes();
+      if (!first) return;
+      await first.engine.warmUp();
+      if (cancelled) return;
+      await Promise.all(rest.map((l) => l.engine.warmUp()));
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [lanes]);
 
   /**
