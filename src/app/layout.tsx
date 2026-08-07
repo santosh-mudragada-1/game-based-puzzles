@@ -42,9 +42,13 @@ export default function RootLayout({
             <PlanProvider>
               <PuzzleProgressProvider>{children}</PuzzleProgressProvider>
             </PlanProvider>
+            {/*
+              Asks for the Chess.com username once, then holds the loading
+              screen until the games are both fetched and reviewed — so it needs
+              to sit inside the provider doing the reviewing.
+            */}
+            <ConnectDialog />
           </ReviewsProvider>
-          {/* Asks for the Chess.com username once, then gets out of the way. */}
-          <ConnectDialog />
         </ChessAccountProvider>
       </body>
     </html>

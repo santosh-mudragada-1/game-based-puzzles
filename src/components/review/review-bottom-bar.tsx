@@ -1,6 +1,4 @@
-import Image from "next/image";
-import { Star, Share2, Check } from "lucide-react";
-import { GAME_ICON } from "@/lib/assets";
+import { Star, Share2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function BarButton({
@@ -33,21 +31,17 @@ function BarButton({
 }
 
 /**
- * The persistent action row beneath the Game Review panel: Skills · Add to
- * puzzles · Share. "Add to puzzles" is the Game Based Puzzles hook — it blends
- * in with the native actions until pressed, then flips to a confirmed "Added"
- * state (the parent also raises a toast and queues the puzzles).
+ * The persistent action row beneath the Game Review panel: Skills · Share.
+ *
+ * "Add to puzzles" used to sit between them, from when puzzles were something
+ * you opted a game into. They are mined automatically from every reviewed game
+ * now, so the button had nothing left to do — the Solve column in the archive
+ * is where you pick them up.
  */
 export function ReviewBottomBar({
-  added,
-  onAdd,
-  puzzleCount,
   onShare,
   className,
 }: {
-  added: boolean;
-  onAdd: () => void;
-  puzzleCount: number;
   onShare?: () => void;
   className?: string;
 }) {
@@ -56,29 +50,6 @@ export function ReviewBottomBar({
       <BarButton ariaLabel="Skills">
         <Star className="fill-current" />
         Skills
-      </BarButton>
-
-      <BarButton
-        onClick={added ? undefined : onAdd}
-        ariaPressed={added}
-        ariaLabel={
-          added
-            ? `Added ${puzzleCount} puzzles to your queue`
-            : `Add ${puzzleCount} puzzles from this game to your queue`
-        }
-        className={added ? "cursor-default text-brand hover:text-brand" : undefined}
-      >
-        {added ? (
-          <>
-            <Check strokeWidth={3} className="text-brand" />
-            Added
-          </>
-        ) : (
-          <>
-            <Image src={GAME_ICON.puzzleGrey} width={16} height={16} alt="" />
-            Add to puzzles
-          </>
-        )}
       </BarButton>
 
       <BarButton onClick={onShare} ariaLabel="Share game">

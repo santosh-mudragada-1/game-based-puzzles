@@ -16,7 +16,6 @@ import { OverviewStats } from "@/components/review/overview-stats";
 import { ReviewBottomBar } from "@/components/review/review-bottom-bar";
 import {
   reviewModel,
-  gamePuzzles,
   notablePliesOf,
   suggestBestMove,
   type ReviewPly,
@@ -25,7 +24,6 @@ import {
 import type { MoveClassification, PieceColor } from "@/types";
 import { cn } from "@/lib/utils";
 
-const PUZZLE_COUNT = gamePuzzles.length;
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 /** The pill beside the coach line — same wording as the bar. */
@@ -213,7 +211,6 @@ export function GameReview({
   const [playTarget, setPlayTarget] = React.useState<number | null>(null);
   const [bestShown, setBestShown] = React.useState(false);
   const [explainShown, setExplainShown] = React.useState(false);
-  const [added, setAdded] = React.useState(false);
   const [toast, setToast] = React.useState(false);
   const [toastMsg, setToastMsg] = React.useState("");
   const toastTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -316,12 +313,6 @@ export function GameReview({
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(false), 2800);
   }, []);
-
-  const handleAdd = () => {
-    if (added) return;
-    setAdded(true);
-    showToast(`${PUZZLE_COUNT} puzzles added to your queue`);
-  };
 
   const handleShare = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -537,12 +528,7 @@ export function GameReview({
                 onNext={() => seek(currentPly + 1)}
                 onLast={() => seek(N)}
               />
-              <ReviewBottomBar
-                added={added}
-                onAdd={handleAdd}
-                onShare={handleShare}
-                puzzleCount={PUZZLE_COUNT}
-              />
+              <ReviewBottomBar onShare={handleShare} />
             </div>
           </>
         )}

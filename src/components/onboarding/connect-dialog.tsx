@@ -6,12 +6,39 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, X } from "lucide-react";
 
 import { useChessAccount } from "@/hooks/use-chess-account";
+import { useReviews } from "@/hooks/use-reviews";
 import { GAME_ICON } from "@/lib/assets";
 import { pieceImage } from "@/lib/chess";
 import { cn } from "@/lib/utils";
 
 /** The six pieces, cycling — a loader made of the thing being loaded. */
 const LOADER_PIECES = ["P", "N", "B", "R", "Q", "K"];
+
+/**
+ * Where the half-typed username is kept.
+ *
+ * Anything that reloads the tab — the dev server refreshing on a save, a stray
+ * ⌘R, a crashed renderer — throws away React state, and the member comes back
+ * to an empty box with no idea why. Per-tab, so it never outlives the visit.
+ */
+const DRAFT_KEY = "gbp:draft-username";
+
+function readDraft(): string {
+  try {
+    return window.sessionStorage.getItem(DRAFT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeDraft(value: string) {
+  try {
+    if (value) window.sessionStorage.setItem(DRAFT_KEY, value);
+    else window.sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // Private browsing with storage denied — the draft simply isn't kept.
+  }
+}
 
 function PieceLoader() {
   return (
@@ -44,46 +71,83 @@ function PieceLoader() {
 export function ConnectDialog() {
   const { profile, status, error, progress, ready, restored, promptNonce, connect } =
     useChessAccount();
+  const { sweep } = useReviews();
   const [value, setValue] = React.useState("");
   const [dismissed, setDismissed] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  const loading = status === "loading";
+  const fetching = status === "loading";
+  /**
+   * The games are reviewed behind this screen, not after it.
+   *
+   * Reviewing starts as soon as the first months land, so by the time the
+   * archive is in most of it is already done — holding the screen for the tail
+   * of it costs a few seconds here and saves the member watching every row
+   * fill in one at a time on the other side.
+   */
+  const reviewing = sweep.target > 0 && sweep.done < sweep.target;
+  const busy = fetching || reviewing;
+
   // Open until an account is connected, or until it's waved away for this
   // visit. A remembered username reconnects quietly in the background.
-  const open = ready && !dismissed && !restored && (!profile || loading);
+  const open = ready && !dismissed && !restored && (!profile || busy);
+
+  // Bring back whatever was typed before the tab reloaded, caret at the end.
+  // Read in an effect rather than during render, so the server-rendered empty
+  // box and the first client render still agree.
+  React.useEffect(() => {
+    const draft = readDraft();
+    if (draft) setValue(draft);
+  }, []);
 
   React.useEffect(() => {
-    if (open && !loading) inputRef.current?.focus();
-  }, [open, loading]);
+    if (!open || busy) return;
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, [open, busy]);
+
+  const onType = (next: string) => {
+    setValue(next);
+    writeDraft(next);
+  };
 
   // Logging out asks again, even if the prompt was waved away earlier.
   React.useEffect(() => {
     if (promptNonce > 0) {
       setDismissed(false);
       setValue("");
+      writeDraft("");
     }
   }, [promptNonce]);
 
-  // A finished load closes the dialog on its own.
+  // Fetched and reviewed — the dialog closes on its own. The draft has served
+  // its purpose by then; the username itself is remembered by the provider.
   React.useEffect(() => {
-    if (status === "ready" && profile) {
+    if (status === "ready" && profile && !reviewing) {
+      writeDraft("");
       const t = setTimeout(() => setDismissed(true), 550);
       return () => clearTimeout(t);
     }
-  }, [status, profile]);
+  }, [status, profile, reviewing]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loading) void connect(value);
+    if (!busy) void connect(value);
   };
 
-  const pct =
-    progress.total > 0
-      ? Math.round((progress.done / progress.total) * 100)
-      : loading
-        ? 6
-        : 0;
+  /**
+   * Fetching is the first half of the bar, reviewing the second, so it fills
+   * once across the whole wait instead of resetting halfway through.
+   */
+  const pct = fetching
+    ? progress.total > 0
+      ? Math.round((progress.done / progress.total) * 50)
+      : 6
+    : reviewing
+      ? 50 + Math.round((sweep.done / sweep.target) * 50)
+      : 100;
 
   return (
     <AnimatePresence>
@@ -105,7 +169,7 @@ export function ConnectDialog() {
             transition={{ type: "spring", stiffness: 380, damping: 30 }}
           >
             {/* Skippable — the prototype still works on its sample game. */}
-            {!loading && (
+            {!busy && (
               <button
                 type="button"
                 aria-label="Continue without connecting"
@@ -124,15 +188,21 @@ export function ConnectDialog() {
                 alt=""
               />
               <h2 className="mt-3.5 font-display text-[26px] font-black leading-none text-white">
-                {loading ? "Reading your games" : "Connect your Chess.com"}
+                {fetching
+                  ? "Reading your games"
+                  : reviewing
+                    ? "Reviewing your games"
+                    : "Connect your Chess.com"}
               </h2>
               <p className="mt-2.5 text-[14px] leading-snug text-ink-muted">
-                {loading
+                {fetching
                   ? "Pulling your archive straight from Chess.com so every puzzle comes from a game you actually played."
-                  : "Enter your Chess.com username and we'll pull your game history, then mine it for the mistakes worth drilling."}
+                  : reviewing
+                    ? "Stockfish is going through the games you had reviewed on Chess.com, looking for the moments worth replaying."
+                    : "Enter your Chess.com username and we'll pull your game history, then mine it for the mistakes worth drilling."}
               </p>
 
-              {loading ? (
+              {busy ? (
                 <div className="mt-7">
                   <PieceLoader />
 
@@ -146,14 +216,18 @@ export function ConnectDialog() {
 
                   <div className="mt-3 flex items-baseline justify-between text-[13px]">
                     <span className="text-ink-soft">
-                      {progress.label || "Finding the account…"}
+                      {fetching
+                        ? progress.label || "Finding the account…"
+                        : "Analysing with Stockfish"}
                     </span>
                     <span className="font-semibold tabular-nums text-ink">
-                      {progress.games > 0
-                        ? `${progress.games} games`
-                        : progress.total > 0
-                          ? `${progress.done}/${progress.total}`
-                          : ""}
+                      {fetching
+                        ? progress.games > 0
+                          ? `${progress.games} games`
+                          : progress.total > 0
+                            ? `${progress.done}/${progress.total}`
+                            : ""
+                        : `${sweep.done}/${sweep.target} games`}
                     </span>
                   </div>
                 </div>
@@ -169,7 +243,7 @@ export function ConnectDialog() {
                     ref={inputRef}
                     id="chesscom-username"
                     value={value}
-                    onChange={(e) => setValue(e.target.value)}
+                    onChange={(e) => onType(e.target.value)}
                     placeholder="e.g. santoshmudragada"
                     autoComplete="off"
                     autoCapitalize="none"

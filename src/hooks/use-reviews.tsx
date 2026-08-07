@@ -111,20 +111,16 @@ function blank(): GameReview {
 
 /**
  * The games the sweep works through: the most recent ones Chess.com has already
- * reviewed, newest first.
+ * reviewed, newest first, and nothing else.
  *
- * If the member has never used Game Review there is nothing to go on, so the
- * most recent games stand in — otherwise the puzzle set would simply be empty
- * for them.
+ * A game with no accuracy has never been asked about, so nobody is waiting on
+ * it — it keeps its Review button and is read only if it is pressed.
  */
 function sweepSet(games: ArchivedGame[]): ArchivedGame[] {
-  const byDate = [...games].sort((a, b) => b.endTime - a.endTime);
-  const reviewed = byDate.filter((g) => g.accuracies).slice(0, SWEEP_GAMES);
-  if (reviewed.length >= SWEEP_GAMES) return reviewed;
-
-  const held = new Set(reviewed.map((g) => g.id));
-  const rest = byDate.filter((g) => !held.has(g.id));
-  return [...reviewed, ...rest.slice(0, SWEEP_GAMES - reviewed.length)];
+  return [...games]
+    .sort((a, b) => b.endTime - a.endTime)
+    .filter((g) => g.accuracies)
+    .slice(0, SWEEP_GAMES);
 }
 
 /** Every position of a game, starting position first, with its moves beside it. */
@@ -182,7 +178,8 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
   /** Set when a game the member is waiting on needs the worker. */
   const abortRef = React.useRef(false);
   const reviewsRef = React.useRef(reviews);
-  const plannedForRef = React.useRef<string | null>(null);
+  /** Games already queued for the sweep, as the archive streams in. */
+  const plannedIdsRef = React.useRef(new Set<string>());
   const accountRef = React.useRef("");
 
   reviewsRef.current = reviews;
@@ -480,18 +477,18 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     [pump],
   );
 
-  // Rebuild when the connected account changes, and plan the sweep once its
-  // archive has finished loading.
+  // Rebuild when the connected account changes, and feed the sweep as the
+  // archive arrives.
   React.useEffect(() => {
     const me = profile?.username ?? "";
     if (me !== accountRef.current) {
       accountRef.current = me;
-      plannedForRef.current = null;
       queueRef.current = [];
       abortRef.current = true;
       engineRef.current?.cancel();
       puzzleSetRef.current = new Set();
       minedRef.current = new Set();
+      plannedIdsRef.current = new Set();
       puzzleCountRef.current = 0;
       rowsRef.current = {};
       setReviews({});
@@ -521,23 +518,36 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
 
-    if (status !== "ready" || games.length === 0) return;
-    if (plannedForRef.current === me) return;
-    plannedForRef.current = me;
+    if (!me || games.length === 0) return;
 
-    // The twenty Chess.com has already reviewed — the same set the day's
-    // puzzles are mined from.
-    const set = sweepSet(games);
-    puzzleSetRef.current = new Set(set.map((g) => g.id));
-    queueRef.current = set.map((g): Job => ({ id: g.id, kind: "review" }));
-    if (queueRef.current.length === 0) return;
+    /**
+     * Start reviewing while the archive is still downloading rather than after.
+     *
+     * Months arrive newest-first, so the reviewed games seen first really are
+     * the most recent ones — the set can be filled in as it appears instead of
+     * waiting for a thousand games to land. That puts the whole pass inside the
+     * loading screen the member is already watching, rather than making them
+     * wait through it twice.
+     */
+    const set = sweepSet(games).filter(
+      (g) => !plannedIdsRef.current.has(g.id),
+    );
+    if (set.length === 0) return;
 
-    setSweep({ target: queueRef.current.length, done: 0, running: true });
+    for (const g of set) {
+      plannedIdsRef.current.add(g.id);
+      puzzleSetRef.current.add(g.id);
+      queueRef.current.push({ id: g.id, kind: "review" });
+    }
+
+    setSweep((s) => ({
+      target: plannedIdsRef.current.size,
+      done: s.done,
+      running: true,
+    }));
     setReviews((r) => {
       const next = { ...r };
-      for (const { id } of queueRef.current) {
-        next[id] = { ...(next[id] ?? blank()), status: "queued" };
-      }
+      for (const g of set) next[g.id] = { ...(next[g.id] ?? blank()), status: "queued" };
       return next;
     });
     pump();
