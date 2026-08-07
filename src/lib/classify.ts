@@ -98,14 +98,49 @@ export function classifyMove(m: MoveInput): Classified {
   return { classification, wpLoss, cp: Math.round(afterCp), mate: afterMate };
 }
 
+/** Accuracy of a single move, from the win percentage it gave up. */
+function moveAccuracy(loss: number): number {
+  const a = 103.1668 * Math.exp(-0.04354 * loss) - 3.1669;
+  // Floored at 1 so the harmonic mean below can't divide by zero.
+  return Math.max(1, Math.min(100, a));
+}
+
+const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
+
 /**
- * Accuracy from a side's *average* win-percentage loss. Averaging per-move
- * accuracy instead lets a wall of forced recaptures drown out the blunders and
- * hands a 500-rated player a 91%.
+ * Accuracy for one side, from its win-percentage losses in move order.
+ *
+ * Lichess's model, and the reason for it: a plain average of per-move accuracy
+ * lets a wall of forced recaptures drown out the blunders — it hands a
+ * 500-rated player a 91%. The blend below fixes that from both ends. The
+ * *harmonic* mean is dominated by the worst moves, so one blunder actually
+ * costs something; the *volatility-weighted* mean leans on the moves played
+ * while the position was still swinging, where the choices mattered. Averaging
+ * the two lands within a few points of Chess.com's own figure for the same
+ * game, which a plain mean loss overstates by ten or more.
+ *
+ * Searching deeper does not close that gap — the same games score within half a
+ * point at depth 14 and depth 20 — so this is a question of the model, not of
+ * how long the engine thinks.
  */
 export function accuracyFrom(losses: number[]): number {
   if (losses.length === 0) return 0;
-  const mean = losses.reduce((s, x) => s + x, 0) / losses.length;
-  const a = 103.1668 * Math.exp(-0.04354 * mean) - 3.1669;
-  return Math.round(Math.max(0, Math.min(100, a)) * 10) / 10;
+
+  const accs = losses.map(moveAccuracy);
+  const harmonic = accs.length / accs.reduce((s, a) => s + 1 / a, 0);
+
+  // Volatility = how much the evaluation was moving around each move, measured
+  // over a window that scales with the length of the game.
+  const window = Math.max(2, Math.min(8, Math.ceil(losses.length / 10)));
+  const weights = accs.map((_, i) => {
+    const slice = losses.slice(Math.max(0, i - window), i + 1);
+    const m = mean(slice);
+    const sd = Math.sqrt(mean(slice.map((x) => (x - m) ** 2)));
+    return Math.max(0.5, Math.min(12, sd));
+  });
+  const total = weights.reduce((s, w) => s + w, 0);
+  const weighted = accs.reduce((s, a, i) => s + a * weights[i], 0) / total;
+
+  const blended = (weighted + harmonic) / 2;
+  return Math.round(Math.max(0, Math.min(100, blended)) * 10) / 10;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { solvePuzzles, puzzleProgress } from "@/data/solve-puzzles";
+import { useActivePuzzles } from "@/hooks/use-active-puzzles";
 import type { PuzzleOutcome } from "@/types";
 
 /** Ordering for "keep the best attempt" when a puzzle is replayed. */
@@ -46,6 +46,9 @@ export function PuzzleProgressProvider({
   children: React.ReactNode;
 }) {
   const [record, setRecord] = React.useState<Record<string, PuzzleOutcome>>({});
+  // Measured against whatever queue is live — the member's own mined puzzles
+  // once their games have been reviewed, the sample set until then.
+  const { puzzles, target } = useActivePuzzles();
 
   const recordOutcome = React.useCallback(
     (puzzleId: string, outcome: PuzzleOutcome) => {
@@ -66,12 +69,12 @@ export function PuzzleProgressProvider({
       solved: outcomes.filter((o) => o.startsWith("solved")).length,
       clean: outcomes.filter((o) => o === "solved-clean").length,
       attempted: outcomes.length,
-      unsolved: solvePuzzles.filter(
+      unsolved: puzzles.filter(
         (p) => record[p.id] && record[p.id] !== "solved-clean",
       ).length,
-      total: puzzleProgress.total,
+      total: target,
     };
-  }, [record, recordOutcome]);
+  }, [record, recordOutcome, puzzles, target]);
 
   return (
     <PuzzleProgressContext.Provider value={value}>

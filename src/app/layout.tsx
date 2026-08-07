@@ -4,6 +4,7 @@ import "./globals.css";
 import { PlanProvider } from "@/hooks/use-plan";
 import { PuzzleProgressProvider } from "@/hooks/use-puzzle-progress";
 import { ChessAccountProvider } from "@/hooks/use-chess-account";
+import { ReviewsProvider } from "@/hooks/use-reviews";
 import { ConnectDialog } from "@/components/onboarding/connect-dialog";
 
 const inter = Inter({
@@ -36,9 +37,12 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} dark`}>
       <body className="min-h-screen bg-bg">
         <ChessAccountProvider>
-          <PlanProvider>
-            <PuzzleProgressProvider>{children}</PuzzleProgressProvider>
-          </PlanProvider>
+          {/* Reviews the archive in the background; the puzzles come out of it. */}
+          <ReviewsProvider>
+            <PlanProvider>
+              <PuzzleProgressProvider>{children}</PuzzleProgressProvider>
+            </PlanProvider>
+          </ReviewsProvider>
           {/* Asks for the Chess.com username once, then gets out of the way. */}
           <ConnectDialog />
         </ChessAccountProvider>

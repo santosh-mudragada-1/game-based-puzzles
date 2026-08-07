@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Game, GameResult, PlayerRef } from "@/types";
@@ -10,6 +11,7 @@ import { Button } from "@/components/shared/button";
 import { FavoriteHeart } from "./favorite-heart";
 import { recentGames, meUsername } from "@/data/games";
 import { useChessAccount } from "@/hooks/use-chess-account";
+import { useReviews } from "@/hooks/use-reviews";
 import { flagOf, toGame } from "@/lib/chesscom";
 import { GAME_ICON } from "@/lib/assets";
 import { cn } from "@/lib/utils";
@@ -84,10 +86,27 @@ function ResultIcon({ result }: { result: GameResult }) {
   );
 }
 
-function GameRow({ g, me }: { g: Game; me: string }) {
+function GameRow({
+  g,
+  me,
+  live,
+  onReview,
+  onSolve,
+}: {
+  g: Game;
+  me: string;
+  /** True when `g.id` is a real Chess.com game the links can carry. */
+  live?: boolean;
+  onReview?: () => void;
+  onSolve?: () => void;
+}) {
   const whiteWon = g.whiteScore === 1;
   const blackWon = g.blackScore === 1;
   const hasPuzzles = g.reviewed && g.blindSpots > 0;
+  const reviewHref = live ? `/review?game=${g.id}` : "/review";
+  const solveHref = live
+    ? `/puzzles/game-based?game=${g.id}`
+    : "/puzzles/game-based";
   return (
     <tr className="group border-t border-line/30 transition-colors odd:bg-white/[0.022] hover:bg-white/[0.05]">
       {/* Time / type */}
@@ -128,7 +147,9 @@ function GameRow({ g, me }: { g: Game; me: string }) {
           </div>
         ) : (
           <Button size="sm" variant="secondary" asChild>
-            <Link href="/review">Review</Link>
+            <Link href={reviewHref} onClick={onReview}>
+              Review
+            </Link>
           </Button>
         )}
       </td>
@@ -142,7 +163,9 @@ function GameRow({ g, me }: { g: Game; me: string }) {
       <td className="px-2 py-2.5 text-center">
         {hasPuzzles ? (
           <Button size="sm" variant="secondary" asChild>
-            <Link href="/puzzles/game-based">Solve</Link>
+            <Link href={solveHref} onClick={onSolve}>
+              Solve
+            </Link>
           </Button>
         ) : (
           <span className="text-2xs font-semibold text-ink-faint">–</span>
@@ -165,7 +188,16 @@ function GameRow({ g, me }: { g: Game; me: string }) {
 /** The dashboard's Game History: the connected archive, or the sample game. */
 export function RecentGames() {
   const { profile, games, status } = useChessAccount();
+  const { reviews, puzzles, request, requestPuzzles } = useReviews();
   const live = games.length > 0;
+
+  /** How many of today's puzzles each game gave up. */
+  const mined = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const p of puzzles) counts[p.gameId] = (counts[p.gameId] ?? 0) + 1;
+    return counts;
+  }, [puzzles]);
+
   const rows = live
     ? games.slice(0, 10).map((g) => {
         const row = toGame(g);
@@ -173,6 +205,15 @@ export function RecentGames() {
         const flag = flagOf(profile?.country ?? undefined) || undefined;
         if (g.userSide === "white") row.white.countryFlag = flag;
         else row.black.countryFlag = flag;
+        // Our own review wins over Chess.com's, since it is what the puzzles
+        // and the review page are built from.
+        const review = reviews[g.id];
+        row.accuracy = review?.accuracy ?? g.accuracies;
+        row.reviewed = row.accuracy != null;
+        // Puzzles already built, or mistakes the review found that Solve can
+        // still turn into some.
+        row.blindSpots =
+          mined[g.id] ?? (review?.status === "done" ? review.mistakes : 0);
         return row;
       })
     : recentGames;
@@ -225,7 +266,14 @@ export function RecentGames() {
           </thead>
           <tbody>
             {rows.map((g) => (
-              <GameRow key={g.id} g={g} me={me} />
+              <GameRow
+                key={g.id}
+                g={g}
+                me={me}
+                live={live}
+                onReview={live ? () => request(g.id) : undefined}
+                onSolve={live ? () => requestPuzzles(g.id) : undefined}
+              />
             ))}
           </tbody>
         </table>

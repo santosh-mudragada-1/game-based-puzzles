@@ -224,10 +224,23 @@ class StockfishEngine {
   }
 }
 
+export type { StockfishEngine };
+
 /** Lazily-created singleton — the worker boots on first analyse, not on import. */
 let instance: StockfishEngine | null = null;
 
 export function getEngine(): StockfishEngine {
   if (!instance) instance = new StockfishEngine();
   return instance;
+}
+
+/**
+ * A private worker, for work that must not fight the one the UI is using.
+ *
+ * The shared engine runs one search at a time, so a background sweep of fifty
+ * games would keep stopping the eval bar the member is actually looking at (and
+ * vice versa). Bulk analysis gets its own thread instead.
+ */
+export function createEngine(): StockfishEngine {
+  return new StockfishEngine();
 }

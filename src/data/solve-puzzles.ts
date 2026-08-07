@@ -209,41 +209,11 @@ export const solvePuzzles: SolvePuzzle[] = [
 ];
 
 /** Plural theme labels for the start-screen list. */
-const CATEGORY_PLURAL: Record<PuzzleCategory, string> = {
+export const CATEGORY_PLURAL: Record<PuzzleCategory, string> = {
   blunder: "Blunders",
   mistake: "Mistakes",
   "missed-opportunity": "Missed Opportunities",
   "opening-mistake": "Opening Mistakes",
-};
-
-/**
- * The theme list on the start screen.
- *
- * Counted from `solvePuzzles` rather than authored, so a theme badge can never
- * promise more puzzles than the "Solve" button actually plays through. Themes
- * with nothing queued are dropped rather than shown as an empty row.
- */
-export const puzzleCategoryStats: PuzzleCategoryStat[] = (
-  Object.keys(CATEGORY_PLURAL) as PuzzleCategory[]
-)
-  .map((category) => ({
-    category,
-    label: CATEGORY_PLURAL[category],
-    count: solvePuzzles.filter((p) => p.category === category).length,
-  }))
-  .filter((c) => c.count > 0);
-
-/**
- * Progress through the queue. `total` is the size of the queue itself — the one
- * number every counter in the app is measured against (the theme badges, the
- * "x/y completed" meters, the session counter, the home card), so they all agree.
- *
- * Nothing is completed before the user starts: a non-zero baseline would put the
- * meter ("3/8") out of step with the puzzle they are actually on ("Puzzle 1 / 8").
- */
-export const puzzleProgress = {
-  completed: 0,
-  total: solvePuzzles.length,
 };
 
 /**

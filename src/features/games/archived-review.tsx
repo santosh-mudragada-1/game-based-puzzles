@@ -6,32 +6,39 @@ import { useSearchParams } from "next/navigation";
 
 import { GameReview } from "@/features/game-based-puzzles/game-review";
 import { useChessAccount } from "@/hooks/use-chess-account";
-import { useGameAnalysis } from "@/hooks/use-game-analysis";
+import { useReviews } from "@/hooks/use-reviews";
 import { buildModelFromPgn } from "@/lib/pgn";
 
 /**
  * Game Review for a game clicked out of the archive.
  *
  * Without `?game=` this is the sample game with its baked depth-18 analysis.
- * With one, the PGN comes from the connected account and Stockfish works
- * through it here in the browser — the board opens straight away and the
- * classifications, graph and accuracies fill in as the engine goes.
+ * With one, the review comes from the same background pass that fills the
+ * archive's accuracy column — asking for it here just moves it to the front of
+ * that queue, so the board opens straight away and the classifications, graph
+ * and accuracies fill in as the engine works, and none of it is thrown away if
+ * the member wanders off mid-analysis.
  */
 export function ArchivedReview() {
   const id = useSearchParams().get("game");
   const { games, profile, status } = useChessAccount();
+  const { reviews, request } = useReviews();
 
   const game = React.useMemo(
     () => (id ? games.find((g) => g.id === id) : undefined),
     [id, games],
   );
 
-  const analysis = useGameAnalysis(game?.pgn ?? null);
+  React.useEffect(() => {
+    if (game) request(game.id);
+  }, [game, request]);
+
+  const review = id ? reviews[id] : undefined;
 
   const model = React.useMemo(() => {
     if (!game) return undefined;
-    return buildModelFromPgn(game.pgn, profile?.username ?? "", analysis.rows);
-  }, [game, profile, analysis.rows]);
+    return buildModelFromPgn(game.pgn, profile?.username ?? "", review?.rows ?? []);
+  }, [game, profile, review?.rows]);
 
   // Asked for a game we haven't got — usually a reload, since games live in
   // memory rather than storage.
@@ -65,7 +72,9 @@ export function ArchivedReview() {
     <GameReview
       model={model}
       analysing={
-        game ? { done: analysis.done, total: analysis.total } : null
+        game
+          ? { done: review?.done ?? 0, total: review?.total ?? 0 }
+          : null
       }
     />
   );

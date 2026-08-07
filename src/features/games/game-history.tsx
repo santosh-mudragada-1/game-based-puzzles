@@ -7,18 +7,18 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Loader2,
   Search,
 } from "lucide-react";
 
 import { Avatar } from "@/components/shared/avatar";
 import { FavoriteHeart } from "@/components/dashboard/favorite-heart";
 import { useChessAccount } from "@/hooks/use-chess-account";
+import { useOpponents } from "@/hooks/use-opponents";
+import { useReviews, type GameReview } from "@/hooks/use-reviews";
 import { flagOf, type ArchivedGame } from "@/lib/chesscom";
 import { GAME_ICON } from "@/lib/assets";
 import { cn } from "@/lib/utils";
-
-const TABS = ["All", "Favorites", "Live", "Daily", "Bot", "Coach"] as const;
-type Tab = (typeof TABS)[number];
 
 /** Chess.com's time-class glyphs; anything unusual falls back to the puzzle icon. */
 const CLASS_ICON: Record<string, string> = {
@@ -48,6 +48,7 @@ function PlayerLine({
   side,
   isMe,
   won,
+  photo,
 }: {
   name: string;
   rating: number;
@@ -55,10 +56,12 @@ function PlayerLine({
   side: "white" | "black";
   isMe: boolean;
   won: boolean;
+  /** Their Chess.com photo, when we have one. */
+  photo?: string | null;
 }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <Avatar size={20} alt="" />
+      <Avatar size={20} src={photo} alt="" />
       <span
         aria-hidden
         className={cn(
@@ -108,14 +111,79 @@ function ResultIcon({ result }: { result: ArchivedGame["result"] }) {
   );
 }
 
+/**
+ * The Review column, which becomes the game's accuracy once it has one.
+ *
+ * Accuracy is the whole point of reviewing, so once a game has been through
+ * either Chess.com's review or ours, the number replaces the button — there is
+ * nothing left to ask for. Clicking it opens the review anyway.
+ */
+function ReviewCell({
+  game,
+  review,
+  onRequest,
+}: {
+  game: ArchivedGame;
+  review?: GameReview;
+  onRequest: () => void;
+}) {
+  const accuracy = review?.accuracy;
+  const href = `/review?game=${game.id}`;
+
+  if (accuracy) {
+    return (
+      <Link
+        href={href}
+        title={
+          review?.source === "chesscom"
+            ? "Accuracy from Chess.com's review"
+            : "Accuracy from your Stockfish review"
+        }
+        className="flex flex-col items-center gap-1 rounded-[6px] py-1 text-xs font-bold tabular-nums text-ink-muted transition-colors hover:bg-white/[0.06] hover:text-ink"
+      >
+        <span>{accuracy.white.toFixed(1)}</span>
+        <span>{accuracy.black.toFixed(1)}</span>
+      </Link>
+    );
+  }
+
+  if (review?.status === "running") {
+    const pct = review.total
+      ? Math.round((review.done / review.total) * 100)
+      : 0;
+    return (
+      <span className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-[6px] bg-white/[0.05] px-2 text-[12px] font-semibold tabular-nums text-ink-soft">
+        <Loader2 className="size-3.5 animate-spin" />
+        {pct}%
+      </span>
+    );
+  }
+
+  return (
+    <Link href={href} onClick={onRequest} className={ROW_BTN}>
+      Review
+    </Link>
+  );
+}
+
 function GameRow({
   game,
   me,
   myCountry,
+  review,
+  hasPuzzles,
+  onRequest,
+  onSolve,
+  photoOf,
 }: {
   game: ArchivedGame;
   me: string;
   myCountry?: string;
+  review?: GameReview;
+  hasPuzzles: boolean;
+  onRequest: () => void;
+  onSolve: () => void;
+  photoOf: (username: string) => string | null;
 }) {
   const lower = me.toLowerCase();
   const whiteWon = game.white.result === "win";
@@ -150,6 +218,7 @@ function GameRow({
           side="white"
           isMe={game.white.username.toLowerCase() === lower}
           won={whiteWon}
+          photo={photoOf(game.white.username)}
         />
         <PlayerLine
           name={game.black.username}
@@ -160,6 +229,7 @@ function GameRow({
           side="black"
           isMe={game.black.username.toLowerCase() === lower}
           won={blackWon}
+          photo={photoOf(game.black.username)}
         />
       </div>
 
@@ -172,30 +242,33 @@ function GameRow({
         <ResultIcon result={game.result} />
       </div>
 
-      {/* Chess.com's own accuracies, when it has already reviewed the game */}
-      <div className="w-[52px] shrink-0 text-center">
-        {game.accuracies ? (
-          <div className="flex flex-col gap-1 text-xs font-semibold tabular-nums text-ink-muted">
-            <span>{game.accuracies.white.toFixed(1)}</span>
-            <span>{game.accuracies.black.toFixed(1)}</span>
-          </div>
-        ) : (
-          <span className="text-2xs font-semibold text-ink-faint">–</span>
-        )}
-      </div>
-
-      {/* Our own review — the PGN goes to Stockfish when this is clicked */}
+      {/* Review, or the accuracy it produced */}
       <div className="w-[86px] shrink-0 text-center">
-        <Link href={`/review?game=${game.id}`} className={ROW_BTN}>
-          Review
-        </Link>
+        <ReviewCell game={game} review={review} onRequest={onRequest} />
       </div>
 
-      {/* Drill the mistakes this game gave up */}
+      {/* Drill the mistakes this game gave up — only once it has been reviewed */}
       <div className="w-[76px] shrink-0 text-center">
-        <Link href="/puzzles/game-based" className={ROW_BTN}>
-          Solve
-        </Link>
+        {hasPuzzles ? (
+          <Link
+            href={`/puzzles/game-based?game=${game.id}`}
+            onClick={onSolve}
+            className={ROW_BTN}
+          >
+            Solve
+          </Link>
+        ) : (
+          <span
+            className="text-[13px] font-semibold text-ink-faint"
+            title={
+              review?.status === "done"
+                ? "Nothing to drill — you played this one cleanly"
+                : "Available once the game has been reviewed"
+            }
+          >
+            –
+          </span>
+        )}
       </div>
 
       <span className="w-9 shrink-0 text-center text-[13px] font-semibold tabular-nums text-ink-muted">
@@ -317,7 +390,8 @@ function Pagination({
  */
 export function GameHistory() {
   const { profile, games, status, progress } = useChessAccount();
-  const [tab, setTab] = React.useState<Tab>("All");
+  const { reviews, puzzles, sweep, request, requestPuzzles } = useReviews();
+  const { opponents } = useOpponents(12);
   const [query, setQuery] = React.useState("");
   const [searching, setSearching] = React.useState(false);
   const [newestFirst, setNewestFirst] = React.useState(true);
@@ -325,15 +399,37 @@ export function GameHistory() {
 
   const me = profile?.username ?? "";
 
+  /**
+   * Rows that can be solved: a game we have reviewed ourselves that turned up
+   * at least one mistake worth drilling. Clicking Solve mines it if the daily
+   * pass hasn't already.
+   */
+  const solvable = React.useMemo(() => {
+    const ids = new Set(puzzles.map((p) => p.gameId));
+    for (const [id, r] of Object.entries(reviews)) {
+      if (r.status === "done" && r.mistakes > 0) ids.add(id);
+    }
+    return ids;
+  }, [puzzles, reviews]);
+
+  /**
+   * Photos. The archive names players but carries nothing else about them, and
+   * a lookup per row would be hundreds of requests — so this is the member's own
+   * photo plus the regular opponents already fetched for the home rail.
+   */
+  const photos = React.useMemo(() => {
+    const map = new Map<string, string | null>();
+    if (profile) map.set(profile.username.toLowerCase(), profile.avatar);
+    for (const o of opponents) map.set(o.username.toLowerCase(), o.avatar);
+    return map;
+  }, [profile, opponents]);
+  const photoOf = React.useCallback(
+    (username: string) => photos.get(username.toLowerCase()) ?? null,
+    [photos],
+  );
+
   const filtered = React.useMemo(() => {
     let list = games;
-    if (tab === "Live")
-      list = list.filter((g) => g.timeClass !== "daily" && !g.vsBot);
-    else if (tab === "Daily") list = list.filter((g) => g.timeClass === "daily");
-    else if (tab === "Bot") list = list.filter((g) => g.vsBot);
-    else if (tab === "Coach") list = [];
-    else if (tab === "Favorites") list = [];
-
     const q = query.trim().toLowerCase();
     if (q) {
       list = list.filter(
@@ -343,7 +439,7 @@ export function GameHistory() {
       );
     }
     return newestFirst ? list : [...list].reverse();
-  }, [games, tab, query, newestFirst]);
+  }, [games, query, newestFirst]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const current = Math.min(page, pageCount);
@@ -353,7 +449,7 @@ export function GameHistory() {
   );
 
   // Any change to what's being listed puts you back at the top of it.
-  React.useEffect(() => setPage(1), [tab, query, newestFirst]);
+  React.useEffect(() => setPage(1), [query, newestFirst]);
 
   const loading = status === "loading";
 
@@ -372,30 +468,30 @@ export function GameHistory() {
       </div>
 
       <div className="overflow-hidden rounded-[6px] bg-surface">
-        {/* Tabs */}
-        <div className="flex items-center border-b border-line/40 px-0">
-          <div className="flex min-w-0 flex-1">
-            {TABS.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                aria-current={t === tab ? "true" : undefined}
-                className={cn(
-                  "relative flex-1 px-2 py-5 text-[14px] font-semibold transition-colors",
-                  t === tab
-                    ? "text-white"
-                    : "text-ink-soft hover:text-ink-muted",
-                )}
-              >
-                {t}
-                {t === tab && (
-                  <span className="absolute inset-x-0 bottom-0 h-[3px] bg-brand" />
-                )}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-1 pr-2">
+        {/* Toolbar */}
+        <div className="flex items-center gap-2 border-b border-line/40 px-4 py-2.5">
+          <span className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1.5 text-[14px] font-semibold text-ink-muted">
+            All Games ({filtered.length})
+            <ChevronDown className="size-4 text-ink-soft" />
+          </span>
+          <button
+            type="button"
+            onClick={() => setNewestFirst((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1.5 text-[14px] font-semibold text-ink-muted transition-colors hover:text-ink"
+          >
+            Date: {newestFirst ? "Latest First" : "Oldest First"}
+            <ChevronDown className="size-4 text-ink-soft" />
+          </button>
+
+          {/* How far the background review has got through the archive */}
+          {sweep.target > 0 && sweep.done < sweep.target && (
+            <span className="ml-1 inline-flex items-center gap-1.5 text-[13px] font-semibold tabular-nums text-ink-soft">
+              <Loader2 className="size-3.5 animate-spin" />
+              Reviewing {sweep.done}/{sweep.target}
+            </span>
+          )}
+
+          <div className="ml-auto flex items-center gap-1">
             {searching && (
               <input
                 autoFocus
@@ -412,27 +508,11 @@ export function GameHistory() {
                 setSearching((v) => !v);
                 if (searching) setQuery("");
               }}
-              className="grid size-12 place-items-center text-ink-soft transition-colors hover:text-ink"
+              className="grid size-10 place-items-center text-ink-soft transition-colors hover:text-ink"
             >
               <Search className="size-5" />
             </button>
           </div>
-        </div>
-
-        {/* Toolbar */}
-        <div className="flex items-center gap-2 px-4 py-2">
-          <span className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1.5 text-[14px] font-semibold text-ink-muted">
-            All Games ({filtered.length})
-            <ChevronDown className="size-4 text-ink-soft" />
-          </span>
-          <button
-            type="button"
-            onClick={() => setNewestFirst((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1.5 text-[14px] font-semibold text-ink-muted transition-colors hover:text-ink"
-          >
-            Date: {newestFirst ? "Latest First" : "Oldest First"}
-            <ChevronDown className="size-4 text-ink-soft" />
-          </button>
         </div>
 
         {/* Rows */}
@@ -443,6 +523,11 @@ export function GameHistory() {
               game={g}
               me={me}
               myCountry={profile?.country ?? undefined}
+              review={reviews[g.id]}
+              hasPuzzles={solvable.has(g.id)}
+              onRequest={() => request(g.id)}
+              onSolve={() => requestPuzzles(g.id)}
+              photoOf={photoOf}
             />
           ))}
 
@@ -455,9 +540,7 @@ export function GameHistory() {
             <p className="border-t border-line/30 px-4 py-16 text-center text-[14px] text-ink-soft">
               {games.length === 0
                 ? "No games loaded yet — connect a Chess.com account from the dashboard."
-                : tab === "Coach" || tab === "Favorites"
-                  ? `Nothing under ${tab} for this account.`
-                  : "No games match that search."}
+                : "No games match that search."}
             </p>
           )}
         </div>

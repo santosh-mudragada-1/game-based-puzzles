@@ -323,6 +323,11 @@ export interface SolvePuzzle {
   gameId: string;
   /** Ply to deep-link into the full game review (/review?ply=). */
   reviewPly: number;
+  /**
+   * True when `gameId` is a real Chess.com game in the loaded archive, so the
+   * "View game" link can open that game rather than the sample review.
+   */
+  archived?: boolean;
 }
 
 /**

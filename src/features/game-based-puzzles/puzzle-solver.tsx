@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
@@ -31,14 +31,16 @@ import { SanText } from "@/components/puzzles/san-text";
 import { GAME_ICON, ICON } from "@/lib/assets";
 import { currentUser } from "@/data";
 import {
-  solvePuzzles,
-  puzzleCategoryStats,
-  puzzleProgress,
-  coachIntro,
   CATEGORY_LABEL,
   CATEGORY_ICON,
   FREE_DAILY_LIMIT,
+  coachIntro,
 } from "@/data/solve-puzzles";
+import { useActivePuzzles } from "@/hooks/use-active-puzzles";
+import { useChessAccount } from "@/hooks/use-chess-account";
+import { useOpponents } from "@/hooks/use-opponents";
+import { useReviews } from "@/hooks/use-reviews";
+import { flagOf } from "@/lib/chesscom";
 import { usePlan } from "@/hooks/use-plan";
 import { usePuzzleProgress } from "@/hooks/use-puzzle-progress";
 import {
@@ -96,14 +98,22 @@ function PlayerRow({
   player,
   isUser,
   thinking,
+  avatar,
 }: {
   player: PlayerRef;
   isUser?: boolean;
   thinking?: boolean;
+  /** The member's real Chess.com photo, when an account is connected. */
+  avatar?: string | null;
 }) {
   return (
     <div className="flex items-center gap-2.5">
-      <Avatar size={34} rounded="md" alt={`${player.username} avatar`} />
+      <Avatar
+        size={34}
+        rounded="md"
+        src={avatar}
+        alt={`${player.username} avatar`}
+      />
       <span className="truncate text-[14px] font-bold text-ink">
         {player.username}
       </span>
@@ -465,6 +475,9 @@ function SessionStat({
 function StartView({
   onStart,
   progress,
+  categories,
+  intro,
+  total,
 }: {
   onStart: (category: PuzzleCategory | null) => void;
   /**
@@ -479,6 +492,10 @@ function StartView({
     total: number;
     locked: boolean;
   };
+  /** Themes in the live queue, counted from the queue itself. */
+  categories: { category: PuzzleCategory; label: string; count: number }[];
+  intro: string;
+  total: number;
 }) {
   return (
     <>
@@ -489,7 +506,7 @@ function StartView({
               ? progress.locked
                 ? `You've used today's ${progress.done} free puzzles. ${progress.left} still waiting.`
                 : `${progress.done} done, ${progress.left} to go.`
-              : coachIntro
+              : intro
           }
         />
 
@@ -509,7 +526,7 @@ function StartView({
           Pick a theme to drill — or Solve all
         </p>
         <div className="space-y-0.5">
-          {puzzleCategoryStats.map((c) => (
+          {categories.map((c) => (
             <button
               key={c.category}
               type="button"
@@ -536,8 +553,8 @@ function StartView({
       </div>
       <div className="shrink-0 space-y-3 border-t border-line/40 bg-black/[0.14] px-6 pb-6 pt-4">
         <ProgressRow
-          completed={progress ? progress.done : puzzleProgress.completed}
-          total={progress ? progress.total : puzzleProgress.total}
+          completed={progress ? progress.done : 0}
+          total={progress ? progress.total : total}
         />
         <button
           type="button"
@@ -570,7 +587,11 @@ function ClassificationTag({ puzzle }: { puzzle: SolvePuzzle }) {
         <span className="text-white/70">vs {puzzle.opponent}</span>
       </span>
       <Link
-        href={`/review?ply=${puzzle.reviewPly}`}
+        href={
+          puzzle.archived
+            ? `/review?game=${puzzle.gameId}&ply=${puzzle.reviewPly}`
+            : `/review?ply=${puzzle.reviewPly}`
+        }
         target="_blank"
         rel="noreferrer"
         className="ml-auto flex shrink-0 items-center gap-1 text-[14px] text-white/70 transition-colors hover:text-white"
@@ -589,6 +610,36 @@ type View = "start" | "run";
 export function PuzzleSolver() {
   const router = useRouter();
   const { plan, setPlan } = usePlan();
+  /**
+   * The live queue: puzzles mined from this member's own reviewed games once
+   * there are any, the authored sample set until then.
+   */
+  const {
+    puzzles: queue,
+    categories,
+    live,
+    mining,
+    target: queueTotal,
+  } = useActivePuzzles();
+  /** "Solve" on a row of the archive opens straight into that game's puzzles. */
+  const gameFilter = useSearchParams().get("game");
+  const { gamePuzzles, requestPuzzles } = useReviews();
+  const { profile } = useChessAccount();
+  const { opponents } = useOpponents(8);
+
+  /** The trainee — the connected Chess.com member when there is one. */
+  const me = React.useCallback(
+    (side: PieceColor): PlayerRef =>
+      profile
+        ? {
+            username: profile.username,
+            rating: profile.stats.rapid?.rating ?? currentUser.ratings.rapid,
+            color: side,
+            countryFlag: flagOf(profile.country ?? undefined) || undefined,
+          }
+        : mePlayer(side),
+    [profile],
+  );
   const [view, setView] = React.useState<View>("start");
   /** The end-of-session celebration, shown over the finished puzzle. */
   const [completeOpen, setCompleteOpen] = React.useState(false);
@@ -596,7 +647,7 @@ export function PuzzleSolver() {
   const [upgrading, setUpgrading] = React.useState(false);
   /** True once a run has happened, so the start screen can recap it. */
   const [played, setPlayed] = React.useState(false);
-  const [session, setSession] = React.useState<SolvePuzzle[]>(solvePuzzles);
+  const [session, setSession] = React.useState<SolvePuzzle[]>(queue);
   const [index, setIndex] = React.useState(0);
   const [outcomes, setOutcomes] = React.useState<Record<string, Outcome>>({});
   /**
@@ -744,24 +795,24 @@ export function PuzzleSolver() {
    * the natural thing to offer once a theme is cleared.
    */
   const nextCategory = React.useMemo(() => {
-    const order = puzzleCategoryStats.map((c) => c.category);
+    const order = categories.map((c) => c.category);
     const from = sessionCat ? order.indexOf(sessionCat) + 1 : 0;
     const rotated = [...order.slice(from), ...order.slice(0, Math.max(0, from))];
     return (
       rotated.find((cat) =>
-        solvePuzzles.some(
+        queue.some(
           (p) => p.category === cat && record[p.id] !== "solved-clean",
         ),
       ) ?? null
     );
-  }, [sessionCat, record]);
+  }, [sessionCat, record, categories, queue]);
   /** Recap shown when returning to the start screen mid-queue. */
   const startProgress = played
     ? {
         done: solvedTotal,
-        left: Math.max(0, puzzleProgress.total - attemptedTotal),
+        left: Math.max(0, queueTotal - attemptedTotal),
         replay: unsolvedCount,
-        total: puzzleProgress.total,
+        total: queueTotal,
         locked: outOfPuzzles,
       }
     : undefined;
@@ -873,14 +924,32 @@ export function PuzzleSolver() {
       setCompleteOpen(true);
       return;
     }
-    const q = category
-      ? solvePuzzles.filter((p) => p.category === category)
-      : solvePuzzles;
-    const pool = q.length ? q : solvePuzzles;
+    const q = category ? queue.filter((p) => p.category === category) : queue;
+    const pool = q.length ? q : queue;
     // The queue is never trimmed for free members: they should see all of it —
     // and how far in the wall sits. `dailyLimit` is what actually stops them.
     beginSession(pool, q.length ? category : null);
   };
+
+  /**
+   * "Solve" from a row of the archive deals that game's puzzles straight away,
+   * rather than dropping the member on the start screen to find them again.
+   * They may not exist yet — asking for them puts that game to the front of the
+   * engine's queue, and the session opens the moment the first one lands.
+   */
+  const autoStarted = React.useRef(false);
+  React.useEffect(() => {
+    if (gameFilter) requestPuzzles(gameFilter);
+  }, [gameFilter, requestPuzzles]);
+
+  React.useEffect(() => {
+    if (!gameFilter || autoStarted.current) return;
+    const forGame = gamePuzzles[gameFilter] ?? [];
+    if (forGame.length === 0) return;
+    autoStarted.current = true;
+    beginSession(forGame, null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameFilter, gamePuzzles]);
 
   /** The X, the backdrop and "Back to Puzzles" all land back on the start screen. */
   const closeToStart = () => {
@@ -907,7 +976,7 @@ export function PuzzleSolver() {
 
   /** Re-run only the puzzles that needed a hint, a reveal, or a wrong guess. */
   const retryUnsolved = () => {
-    const again = solvePuzzles.filter(
+    const again = queue.filter(
       (p) => record[p.id] && record[p.id] !== "solved-clean",
     );
     beginSession(again.length ? again : session, sessionCat);
@@ -1017,12 +1086,22 @@ export function PuzzleSolver() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, index, solved, reachedPly, viewPly, userTurn, completeOpen, upgrading]);
 
+  /** The opponent's real profile, when they are someone this member plays often. */
+  const opponentProfile = puzzle
+    ? opponents.find(
+        (o) => o.username.toLowerCase() === puzzle.opponent.toLowerCase(),
+      )
+    : undefined;
   const opponent: PlayerRef | null = puzzle
     ? {
         username: puzzle.opponent,
         rating: puzzle.opponentRating,
         color: userSide === "white" ? "black" : "white",
-        countryFlag: "🇮🇳",
+        // The sample set is authored with a flag; a real opponent only gets one
+        // if Chess.com actually publishes their country.
+        countryFlag: live
+          ? flagOf(opponentProfile?.country ?? undefined) || undefined
+          : "🇮🇳",
       }
     : null;
   // The opponent's reply is auto-playing (between your move and theirs).
@@ -1117,8 +1196,18 @@ export function PuzzleSolver() {
     .filter((p) => p.side === userSide)
     .map((p) => p.san);
 
+  /** The coach's opening line, describing the queue that is actually loaded. */
+  const intro =
+    gameFilter && !autoStarted.current
+      ? "Looking through that game for the moments worth replaying…"
+      : !live
+        ? coachIntro
+        : mining
+          ? `${queue.length} ready so far — still reviewing your games for more.`
+          : `${queue.length} puzzles from the mistakes in your recent games.`;
+
   const coachText = !puzzle
-    ? coachIntro
+    ? intro
     : solved
       ? puzzle.solvedLine
       : !atLive
@@ -1151,7 +1240,11 @@ export function PuzzleSolver() {
           </div>
         ) : view === "run" && puzzle && opponent ? (
           <div className="mx-auto flex w-full max-w-[min(100%,calc(100vh-9rem))] flex-col justify-center gap-2 sm:gap-3">
-            <PlayerRow player={opponent} thinking={opponentThinking} />
+            <PlayerRow
+              player={opponent}
+              thinking={opponentThinking}
+              avatar={opponentProfile?.avatar}
+            />
             <div className="flex min-h-0 items-stretch justify-center gap-1.5 sm:gap-2">
               <PuzzleEvalBar
                 key={puzzle.id}
@@ -1194,7 +1287,7 @@ export function PuzzleSolver() {
                 />
               </div>
             </div>
-            <PlayerRow player={mePlayer(userSide)} isUser />
+            <PlayerRow player={me(userSide)} isUser avatar={profile?.avatar} />
           </div>
         ) : (
           // completion — show the last solved position behind
@@ -1214,7 +1307,13 @@ export function PuzzleSolver() {
         <PanelHeader onBack={backTo} />
 
         {view === "start" && (
-          <StartView onStart={start} progress={startProgress} />
+          <StartView
+            onStart={start}
+            progress={startProgress}
+            categories={categories}
+            intro={intro}
+            total={queueTotal}
+          />
         )}
 
         {view === "run" && puzzle && (
@@ -1389,13 +1488,13 @@ export function PuzzleSolver() {
           solvedTotal={solvedTotal}
           attempted={attemptedTotal}
           unsolved={unsolvedCount}
-          queueTotal={puzzleProgress.total}
+          queueTotal={queueTotal}
           nextCategoryLabel={
             nextCategory
               ? // The plural theme label ("Mistakes"), matching the list on the
                 // start screen rather than the singular tag used on the board.
-                (puzzleCategoryStats.find((c) => c.category === nextCategory)
-                  ?.label ?? CATEGORY_LABEL[nextCategory])
+                (categories.find((c) => c.category === nextCategory)?.label ??
+                CATEGORY_LABEL[nextCategory])
               : null
           }
           nextCategoryIcon={

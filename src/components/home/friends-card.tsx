@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import {
   Card,
@@ -7,36 +9,88 @@ import {
 } from "@/components/shared/card";
 import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
+import { isOnline, useOpponents } from "@/hooks/use-opponents";
 import { friends } from "@/data/home";
 import { ICON } from "@/lib/assets";
 
+/**
+ * The people this member plays.
+ *
+ * Chess.com's public API publishes no friends list, so the card shows the real
+ * thing it does publish — the opponents from the loaded archive, with their own
+ * photos and country flags. Falls back to the sample names before an account is
+ * connected, so the rail is never a row of holes.
+ */
 export function FriendsCard() {
+  const { opponents } = useOpponents(8);
+  const live = opponents.length > 0;
+
+  const people = live
+    ? opponents.map((o) => ({
+        username: o.username,
+        avatar: o.avatar,
+        online: isOnline(o.lastOnline),
+        url: o.url,
+        sub: `${o.games} ${o.games === 1 ? "game" : "games"}`,
+      }))
+    : friends.slice(0, 8).map((f) => ({
+        username: f.username,
+        avatar: null,
+        online: f.online ?? false,
+        url: null,
+        sub: undefined,
+      }));
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Friends</CardTitle>
+        <CardTitle>{live ? "Recent Opponents" : "Friends"}</CardTitle>
       </CardHeader>
       <CardContent>
         <ul className="grid grid-cols-4 gap-3">
-          {friends.map((friend) => (
-            <li
-              key={friend.username}
-              className="flex flex-col items-center gap-1"
-            >
-              <div className="relative">
-                <Avatar size={52} rounded="sm" alt={friend.username} />
-                {friend.online && (
-                  <span
-                    className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-brand ring-2 ring-surface"
-                    aria-hidden="true"
+          {people.map((person) => {
+            const inner = (
+              <>
+                <div className="relative">
+                  <Avatar
+                    size={52}
+                    rounded="sm"
+                    src={person.avatar}
+                    alt={person.username}
                   />
+                  {person.online && (
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-brand ring-2 ring-surface"
+                      aria-hidden="true"
+                    />
+                  )}
+                </div>
+                <span className="max-w-full truncate text-2xs font-semibold text-ink-muted">
+                  {person.username}
+                </span>
+              </>
+            );
+            return (
+              <li
+                key={person.username}
+                className="flex flex-col items-center gap-1"
+                title={person.sub}
+              >
+                {person.url ? (
+                  <a
+                    href={person.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex min-w-0 flex-col items-center gap-1 transition-opacity hover:opacity-80"
+                  >
+                    {inner}
+                  </a>
+                ) : (
+                  inner
                 )}
-              </div>
-              <span className="max-w-full truncate text-2xs font-semibold text-ink-muted">
-                {friend.username}
-              </span>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
         <div className="mt-4">
           <Button variant="secondary" className="w-full">
