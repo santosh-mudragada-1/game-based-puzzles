@@ -20,6 +20,12 @@ export interface EngineEval {
    * for. The gap between this and `cp` is what makes a move the *only* move.
    */
   secondCp: number | null;
+  /**
+   * Third-best line, same convention. With this and `secondCp` a position can
+   * be asked the question that decides how hard it is: how many moves are
+   * *actually* playable here, or is there only one?
+   */
+  thirdCp: number | null;
 }
 
 export const EMPTY_EVAL: EngineEval = {
@@ -28,6 +34,7 @@ export const EMPTY_EVAL: EngineEval = {
   depth: 0,
   bestMove: null,
   secondCp: null,
+  thirdCp: null,
 };
 
 /**
@@ -242,6 +249,8 @@ class StockfishEngine {
               } else if (pv === 2 && parsed.cp != null) {
                 // The runner-up, for spotting a move that was the only one.
                 latest = { ...latest, secondCp: parsed.cp };
+              } else if (pv === 3 && parsed.cp != null) {
+                latest = { ...latest, thirdCp: parsed.cp };
               }
             }
           } else if (line.startsWith("bestmove")) {

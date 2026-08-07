@@ -13,12 +13,7 @@ import {
   type Candidate,
   type MineSource,
 } from "@/lib/mine-puzzles";
-import {
-  difficultyFor,
-  ratingOf,
-  relaxFrom,
-  rungsAbove,
-} from "@/lib/difficulty";
+import { ratingOf, selectSet, STANDARDS } from "@/lib/difficulty";
 import { useChessAccount } from "@/hooks/use-chess-account";
 import {
   loadReviewCache,
@@ -65,6 +60,16 @@ const MAX_WAVES = 2;
 
 /** Puzzles built for the day. */
 export const DAILY_PUZZLE_TARGET = 15;
+
+/**
+ * Moments taken to the engine per game, and puzzles kept from it.
+ *
+ * Collapses are already folded into one entry each, so ten is most of what a
+ * game has to offer. Keeping three at most stops a single disastrous game from
+ * becoming the whole day.
+ */
+const TRY_PER_GAME = 10;
+const KEEP_PER_GAME = 3;
 
 /** When the member asks for one game's puzzles, they can have more of them. */
 const PER_GAME_ON_DEMAND = 4;
@@ -243,14 +248,20 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
   const topUpRef = React.useRef(false);
   const accountRef = React.useRef("");
   /**
-   * How hard a puzzle is allowed to be, from the connected account's rating.
-   * Read through a ref because mining runs inside long-lived lane loops that
-   * must not be rebuilt every time the profile object changes identity.
+   * Everything mined, before selection. The day is chosen out of this rather
+   * than being whatever happened to finish first.
    */
-  const difficultyRef = React.useRef(difficultyFor(null));
-  difficultyRef.current = difficultyFor(ratingOf(profile));
-  /** Relaxed passes already run over the reviewed games; 0 is the strict one. */
-  const relaxStageRef = React.useRef(0);
+  const poolRef = React.useRef<SolvePuzzle[]>([]);
+  /**
+   * The connected account's rating, which nudges the ranking towards clearer
+   * puzzles for a developing player — and does nothing else. Read through a ref
+   * because mining runs inside long-lived lane loops that must not be rebuilt
+   * every time the profile object changes identity.
+   */
+  const ratingRef = React.useRef<number | null>(null);
+  ratingRef.current = ratingOf(profile);
+  /** Which standard the miner is holding candidates to; 0 is the strictest. */
+  const standardRef = React.useRef(0);
   /** Extra twenty-game waves taken on to fill a short day. */
   const wavesRef = React.useRef(0);
 
@@ -424,16 +435,35 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
   );
 
   /**
+   * Add a puzzle to the pool and re-choose the day from everything in it.
+   *
+   * The set is not "the first fifteen that were built" — the games are read in
+   * parallel and finish in whatever order the engine gets to them, so that would
+   * make the day an accident of scheduling. Everything mined goes into a pool
+   * and the fifteen are chosen from it: ranked by what the moment cost and what
+   * it teaches, with a cap on how many of one lesson may be taken.
+   *
+   * Re-choosing while the sweep is still running is safe — a solving session
+   * takes its own copy of the queue when it starts, so a set that improves
+   * underneath the start screen never disturbs anyone mid-puzzle.
+   */
+  const publish = React.useCallback((one: SolvePuzzle) => {
+    if (poolRef.current.some((p) => p.id === one.id)) return;
+    poolRef.current = [...poolRef.current, one];
+    puzzleCountRef.current = poolRef.current.length;
+    setPuzzles(
+      selectSet(poolRef.current, DAILY_PUZZLE_TARGET, ratingRef.current),
+    );
+  }, []);
+
+  /**
    * Build puzzles out of a game that has been reviewed.
    *
-   * `forDay` is the daily set — capped, and capped per game so one collapse
-   * can't fill it. Anything else is somebody clicking Solve on a specific game,
-   * where they want that game's mistakes and no cap applies.
+   * `forDay` feeds the day's pool. Anything else is somebody clicking Solve on a
+   * specific game, where they want that game's own mistakes and no cap applies.
    */
   const mine = React.useCallback(
     async (game: ArchivedGame, rows: Classified[], lane: Lane, forDay = true) => {
-      if (forDay && puzzleCountRef.current >= DAILY_PUZZLE_TARGET) return;
-
       const opponent = game.userSide === "white" ? game.black : game.white;
       const src: MineSource = {
         gameId: game.id,
@@ -444,27 +474,24 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
         endTime: game.endTime,
       };
 
-      // Worst first, and only the worst handful — building a line is engine work.
-      // How deep to look depends on the difficulty rules: the stricter they are,
-      // the more of a game has to be examined to find something that passes.
-      const d = forDay
-        ? relaxFrom(difficultyRef.current, relaxStageRef.current)
-        : difficultyRef.current;
-      const limit = forDay ? d.keepPerGame : PER_GAME_ON_DEMAND;
+      // Collapses are already folded into their first move by findCandidates, so
+      // what comes back is one entry per lesson, worst first. Building a line is
+      // engine work, so only the worst few of a game are taken to the engine.
+      const standard = STANDARDS[Math.min(standardRef.current, STANDARDS.length - 1)];
+      const limit = forDay ? KEEP_PER_GAME : PER_GAME_ON_DEMAND;
       const candidates: Candidate[] = findCandidates(src, rows).slice(
         0,
-        forDay ? d.tryPerGame : 10,
+        forDay ? TRY_PER_GAME : 10,
       );
       let made = 0;
       const built: SolvePuzzle[] = [];
 
       for (const c of candidates) {
         if (!aliveRef.current || made >= limit) break;
-        if (forDay && puzzleCountRef.current >= DAILY_PUZZLE_TARGET) break;
 
         let puzzle: SolvePuzzle | null = null;
         try {
-          puzzle = await buildPuzzle(lane.engine, c, d);
+          puzzle = await buildPuzzle(lane.engine, c, standard);
         } catch (err) {
           if (err instanceof EngineCancelled) return;
           continue;
@@ -474,18 +501,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
         const one = puzzle;
         made++;
         built.push(one);
-        if (forDay) {
-          puzzleCountRef.current++;
-          // Several lanes finish at once, so the count can be read as under the
-          // target by two of them together and overshoot it. The set itself is
-          // the last word on how long the day is; the extras stay filed under
-          // the games they came from.
-          setPuzzles((p) =>
-            p.length >= DAILY_PUZZLE_TARGET || p.some((x) => x.id === one.id)
-              ? p
-              : [...p, one],
-          );
-        }
+        if (forDay) publish(one);
       }
 
       // Only the on-demand pass looks at every mistake; the daily one stops at
@@ -505,7 +521,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
         return { ...g, [game.id]: merged };
       });
     },
-    [],
+    [publish],
   );
 
   /**
@@ -623,10 +639,10 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
                 return;
               }
               if (
-                relaxStageRef.current < rungsAbove(difficultyRef.current) &&
+                standardRef.current < STANDARDS.length - 1 &&
                 puzzleSetRef.current.size > 0
               ) {
-                relaxStageRef.current++;
+                standardRef.current++;
                 for (const id of puzzleSetRef.current) {
                   if (rowsRef.current[id]?.length)
                     queueRef.current.push({ id, kind: "mine", forDay: true });
@@ -729,8 +745,9 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
       plannedIdsRef.current = new Set();
       firstBatchRef.current = new Set();
       queuedRef.current = 0;
-      relaxStageRef.current = 0;
+      standardRef.current = 0;
       wavesRef.current = 0;
+      poolRef.current = [];
       puzzleCountRef.current = 0;
       rowsRef.current = {};
       setReviews({});
@@ -763,6 +780,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
           };
         }
         for (const id of cached.mined) minedRef.current.add(id);
+        poolRef.current = cached.puzzles;
         puzzleCountRef.current = cached.puzzles.length;
         setReviews(restored);
         setPuzzles(cached.puzzles);

@@ -257,6 +257,28 @@ export type PuzzleCategory =
   | "missed-opportunity"
   | "opening-mistake";
 
+/**
+ * What a puzzle is *about* — the lesson, as a coach would file it.
+ *
+ * Separate from `PuzzleCategory`, which records how Chess.com classified the
+ * move that was played. Two blunders can teach completely different things, and
+ * a set made only of "blunders" is not a curriculum.
+ */
+export type PuzzleTheme =
+  | "mate-attack"
+  | "winning-combination"
+  | "missed-tactic"
+  | "defensive-resource"
+  | "blunder-prevention"
+  | "endgame-conversion"
+  | "punish-mistake";
+
+/** What the solver has to achieve — and therefore where the line stops. */
+export type PuzzleObjective = "mate" | "win-material" | "defend" | "convert";
+
+/** Estimated from the position, never from the solver's rating. */
+export type PuzzleDifficulty = "easy" | "medium" | "hard";
+
 /** A concrete move on the board. */
 export interface PuzzleMove {
   from: string; // "e1"
@@ -317,6 +339,16 @@ export interface SolvePuzzle {
   solvedLine: string;
   /** Short human theme, e.g. "Missed Checkmate". */
   title: string;
+  /** The lesson this position teaches. Drives the mix in the day's set. */
+  theme?: PuzzleTheme;
+  /** What has to be achieved — and therefore where the solution stops. */
+  objective?: PuzzleObjective;
+  /** One line naming what the solver is meant to take away. */
+  learning?: string;
+  /** Judged from the position: depth, alternatives, how visible the idea is. */
+  difficulty?: PuzzleDifficulty;
+  /** Why this moment was made a puzzle, in a sentence. */
+  why?: string;
   /** Source-game context. */
   opponent: string;
   opponentRating: number;

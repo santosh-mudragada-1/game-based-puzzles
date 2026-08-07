@@ -68,9 +68,11 @@ import type {
   PieceColor,
   PlayerRef,
   PuzzleCategory,
+  PuzzleDifficulty,
   PuzzleOutcome,
   SolvePuzzle,
 } from "@/types";
+import { THEME_LABEL } from "@/lib/difficulty";
 import { cn } from "@/lib/utils";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -570,6 +572,13 @@ function StartView({
 
 /* --------------------------------------------------------------- Solve view */
 
+/** Difficulty reads as information, not as a warning — muted, not alarming. */
+const DIFFICULTY_STYLE: Record<PuzzleDifficulty, string> = {
+  easy: "bg-brand/20 text-brand",
+  medium: "bg-white/10 text-ink",
+  hard: "bg-[#ca3431]/20 text-[#e0625c]",
+};
+
 function ClassificationTag({ puzzle }: { puzzle: SolvePuzzle }) {
   return (
     <div className="flex items-center gap-2 rounded-[8px] bg-black/20 p-3">
@@ -582,10 +591,23 @@ function ClassificationTag({ puzzle }: { puzzle: SolvePuzzle }) {
       />
       <span className="min-w-0 truncate text-[14px]">
         <span className="font-semibold text-white">
-          {CATEGORY_LABEL[puzzle.category]}
+          {/* The lesson, where there is one — "Defensive resource" says what
+              this position is for in a way "Blunder" never can. */}
+          {puzzle.theme ? THEME_LABEL[puzzle.theme] : CATEGORY_LABEL[puzzle.category]}
         </span>{" "}
         <span className="text-white/70">vs {puzzle.opponent}</span>
       </span>
+      {puzzle.difficulty && (
+        <span
+          title="Judged from the position: how deep the calculation runs, how many moves are playable, and how visible the idea is."
+          className={cn(
+            "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide",
+            DIFFICULTY_STYLE[puzzle.difficulty],
+          )}
+        >
+          {puzzle.difficulty}
+        </span>
+      )}
       <Link
         href={
           puzzle.archived
@@ -1227,7 +1249,9 @@ export function PuzzleSolver() {
   const coachText = !puzzle
     ? intro
     : solved
-      ? puzzle.solvedLine
+      ? // The lesson, once the answer is in — a coach names what was practised
+        // rather than leaving the position to speak for itself.
+        [puzzle.solvedLine, puzzle.learning].filter(Boolean).join(" ")
       : !atLive
         ? "Reviewing the line — press → to return to your move."
         : wrong
