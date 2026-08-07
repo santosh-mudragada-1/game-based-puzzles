@@ -141,10 +141,15 @@ function GameRow({
       {/* Accuracy — numbers once reviewed, otherwise a Review button */}
       <td className="px-2 py-2.5 text-center">
         {g.reviewed && g.accuracy ? (
-          <div className="flex flex-col gap-1 text-xs font-semibold tabular-nums text-ink-muted">
+          // The number is the way into the review, same as in the full archive —
+          // once a game has been read there is no button left to offer.
+          <Link
+            href={reviewHref}
+            className="mx-auto flex w-fit flex-col gap-1 rounded-[6px] px-2 py-1 text-xs font-semibold tabular-nums text-ink-muted transition-colors hover:bg-white/[0.06] hover:text-ink"
+          >
             <span>{g.accuracy.white.toFixed(1)}</span>
             <span>{g.accuracy.black.toFixed(1)}</span>
-          </div>
+          </Link>
         ) : (
           <Button size="sm" variant="secondary" asChild>
             <Link href={reviewHref} onClick={onReview}>

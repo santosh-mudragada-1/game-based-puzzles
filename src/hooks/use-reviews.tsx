@@ -216,6 +216,8 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
   const reviewsRef = React.useRef(reviews);
   /** Games already queued for the sweep, as the archive streams in. */
   const plannedIdsRef = React.useRef(new Set<string>());
+  /** The first few — mined immediately, so puzzles exist at the door. */
+  const firstBatchRef = React.useRef(new Set<string>());
   const accountRef = React.useRef("");
 
   reviewsRef.current = reviews;
@@ -480,13 +482,20 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
             }
 
             setSweep((s) => ({ ...s, done: s.done + 1 }));
-            // Building puzzle lines is engine work too, and doing it here would
-            // take this lane off the review pass — the count the member is
-            // watching would crawl while a line nobody has asked for yet is
-            // worked out. It goes to the back of the queue instead, so every
-            // game is read first and the puzzles are built from what's left.
+
             if (puzzleSetRef.current.has(job.id) && rows.length) {
-              queueRef.current.push({ id: job.id, kind: "mine", forDay: true });
+              if (firstBatchRef.current.has(job.id)) {
+                // The first few are mined on the spot: these are the puzzles
+                // that have to exist by the time the loading screen lets go,
+                // or the member arrives at an empty queue.
+                await mine(game, rows, lane);
+              } else {
+                // Everything after that waits its turn at the back. Building a
+                // line is engine work too, and doing it inline would take this
+                // lane off the review pass — the count the member is watching
+                // would crawl while a line nobody has asked for is worked out.
+                queueRef.current.push({ id: job.id, kind: "mine", forDay: true });
+              }
             }
           }
         } finally {
@@ -581,6 +590,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
       puzzleSetRef.current = new Set();
       minedRef.current = new Set();
       plannedIdsRef.current = new Set();
+      firstBatchRef.current = new Set();
       puzzleCountRef.current = 0;
       rowsRef.current = {};
       setReviews({});
@@ -627,6 +637,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     if (set.length === 0) return;
 
     for (const g of set) {
+      if (plannedIdsRef.current.size < FIRST_BATCH) firstBatchRef.current.add(g.id);
       plannedIdsRef.current.add(g.id);
       puzzleSetRef.current.add(g.id);
       queueRef.current.push({ id: g.id, kind: "review" });

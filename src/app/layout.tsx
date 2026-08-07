@@ -5,7 +5,7 @@ import { PlanProvider } from "@/hooks/use-plan";
 import { PuzzleProgressProvider } from "@/hooks/use-puzzle-progress";
 import { ChessAccountProvider } from "@/hooks/use-chess-account";
 import { ReviewsProvider } from "@/hooks/use-reviews";
-import { ConnectDialog } from "@/components/onboarding/connect-dialog";
+import { Welcome } from "@/components/onboarding/welcome";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -40,14 +40,16 @@ export default function RootLayout({
           {/* Reviews the archive in the background; the puzzles come out of it. */}
           <ReviewsProvider>
             <PlanProvider>
-              <PuzzleProgressProvider>{children}</PuzzleProgressProvider>
+              <PuzzleProgressProvider>
+                {/*
+                  The username, the wait and the explanation. It holds the app
+                  back until the games are fetched and reviewed, so no
+                  half-loaded dashboard shows through, and sits inside the
+                  provider doing the reviewing because it reports its progress.
+                */}
+                <Welcome>{children}</Welcome>
+              </PuzzleProgressProvider>
             </PlanProvider>
-            {/*
-              Asks for the Chess.com username once, then holds the loading
-              screen until the games are both fetched and reviewed — so it needs
-              to sit inside the provider doing the reviewing.
-            */}
-            <ConnectDialog />
           </ReviewsProvider>
         </ChessAccountProvider>
       </body>

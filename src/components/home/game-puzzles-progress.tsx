@@ -19,14 +19,14 @@ export function GamePuzzlesProgress() {
         <span className="font-display font-bold tabular-nums text-ink">
           {solved}/{total}
         </span>{" "}
-        <span className="text-ink-muted">solved this week</span>
+        <span className="text-ink-muted">completed</span>
       </p>
       <ProgressBar
         value={total ? (solved / total) * 100 : 0}
         color="brand"
         trackClassName="h-2.5"
         className="mt-2"
-        label="Game puzzles solved this week"
+        label="Game puzzles completed"
       />
     </div>
   );
