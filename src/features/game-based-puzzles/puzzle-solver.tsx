@@ -951,6 +951,13 @@ export function PuzzleSolver() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameFilter, gamePuzzles]);
 
+  /**
+   * The engine has been through that game and found nothing worth replaying.
+   * An empty entry means "looked, nothing there" — a missing one means it is
+   * still looking.
+   */
+  const gameHadNothing = !!gameFilter && gamePuzzles[gameFilter]?.length === 0;
+
   /** The X, the backdrop and "Back to Puzzles" all land back on the start screen. */
   const closeToStart = () => {
     setCompleteOpen(false);
@@ -1198,13 +1205,15 @@ export function PuzzleSolver() {
 
   /** The coach's opening line, describing the queue that is actually loaded. */
   const intro =
-    gameFilter && !autoStarted.current
-      ? "Looking through that game for the moments worth replaying…"
-      : !live
-        ? coachIntro
-        : mining
-          ? `${queue.length} ready so far — still reviewing your games for more.`
-          : `${queue.length} puzzles from the mistakes in your recent games.`;
+    gameFilter && gameHadNothing
+      ? "Nothing worth replaying in that game — you kept it clean. Here's today's set instead."
+      : gameFilter && !autoStarted.current
+        ? "Looking through that game for the moments worth replaying…"
+        : !live
+          ? coachIntro
+          : mining
+            ? `${queue.length} ready so far — still reviewing your games for more.`
+            : `${queue.length} puzzles from the mistakes in your recent games.`;
 
   const coachText = !puzzle
     ? intro

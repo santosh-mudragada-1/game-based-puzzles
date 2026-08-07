@@ -257,14 +257,19 @@ function GameRow({
           >
             Solve
           </Link>
+        ) : review?.status === "done" ? (
+          // Reviewed, and there was nothing in it. Said out loud rather than
+          // left as a dash, which next to an accuracy reads as a missing button.
+          <span
+            className="text-[12px] font-semibold text-ink-faint"
+            title="No mistakes to drill — you played this one cleanly"
+          >
+            Clean
+          </span>
         ) : (
           <span
             className="text-[13px] font-semibold text-ink-faint"
-            title={
-              review?.status === "done"
-                ? "Nothing to drill — you played this one cleanly"
-                : "Available once the game has been reviewed"
-            }
+            title="Available once the game has been reviewed"
           >
             –
           </span>
@@ -400,14 +405,24 @@ export function GameHistory() {
   const me = profile?.username ?? "";
 
   /**
-   * Rows that can be solved: a game we have reviewed ourselves that turned up
-   * at least one mistake worth drilling. Clicking Solve mines it if the daily
-   * pass hasn't already.
+   * Rows that can be solved.
+   *
+   * Anything we have reviewed ourselves and found a mistake in — and anything
+   * Chess.com has reviewed, because a row that shows an accuracy and offers
+   * nothing to do about it reads as a bug. The sweep only re-reads the twenty
+   * most recent of those, so Solve on any of the rest reviews and mines it on
+   * the spot.
    */
   const solvable = React.useMemo(() => {
     const ids = new Set(puzzles.map((p) => p.gameId));
     for (const [id, r] of Object.entries(reviews)) {
-      if (r.status === "done" && r.mistakes > 0) ids.add(id);
+      // Keyed off the accuracy rather than the status, so a row queued for the
+      // sweep doesn't lose its button for the few seconds it is being read.
+      // Once our own review lands, `mistakes` is the honest answer and a game
+      // played cleanly gives the button up.
+      if (r.mistakes > 0 || (r.accuracy != null && r.source === "chesscom")) {
+        ids.add(id);
+      }
     }
     return ids;
   }, [puzzles, reviews]);

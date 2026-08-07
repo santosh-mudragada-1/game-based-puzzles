@@ -19,18 +19,24 @@ import type { PieceColor, SolvePuzzle } from "@/types";
 /**
  * Depth for the sweep that runs behind the archive.
  *
- * Fifty games is a few thousand positions; this pass exists to fill the
- * accuracy column and find the moves that went wrong, and both survive a
- * shallower search. A game opened deliberately is analysed at the same depth,
- * so the table and the review page can never quote two numbers for one game.
+ * Twenty games is a couple of thousand positions; this pass exists to find the
+ * moves that went wrong and to score them, and both survive a shallower search.
+ * A game opened deliberately is analysed at the same depth, so the table and
+ * the review page can never quote two numbers for one game.
  */
 const SWEEP_DEPTH = 14;
 
-/** Games auto-reviewed on connect, drawn from the last twelve months. */
-const SWEEP_SIZE = 50;
-
-/** The most recent games are reviewed first — the puzzles come out of those. */
-const PUZZLE_GAMES = 20;
+/**
+ * Games auto-reviewed on connect: the most recent ones **Chess.com has already
+ * reviewed**.
+ *
+ * Those rows are the ones already showing an accuracy, so leaving them without
+ * a Solve button reads as a bug — the member has been told the game was worth
+ * reviewing and then offered nothing to do about it. Reviewing exactly that set
+ * closes the gap, and it is a far better-aimed twenty than a random draw:
+ * asking for a game review is itself a signal the member cared how it went.
+ */
+const SWEEP_GAMES = 20;
 
 /** Puzzles built for the day. */
 export const DAILY_PUZZLE_TARGET = 15;
@@ -43,8 +49,6 @@ const PER_GAME_ON_DEMAND = 4;
 
 /** Positions between publishes — 80 renders a game would make the app crawl. */
 const PUBLISH_EVERY = 8;
-
-const YEAR = 365 * 24 * 60 * 60;
 
 export type ReviewSource = "chesscom" | "stockfish";
 
@@ -105,29 +109,23 @@ function blank(): GameReview {
   };
 }
 
-/** Deterministic PRNG, so "fifty random games" means the same fifty all day. */
-function mulberry32(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+/**
+ * The games the sweep works through: the most recent ones Chess.com has already
+ * reviewed, newest first.
+ *
+ * If the member has never used Game Review there is nothing to go on, so the
+ * most recent games stand in — otherwise the puzzle set would simply be empty
+ * for them.
+ */
+function sweepSet(games: ArchivedGame[]): ArchivedGame[] {
+  const byDate = [...games].sort((a, b) => b.endTime - a.endTime);
+  const reviewed = byDate.filter((g) => g.accuracies).slice(0, SWEEP_GAMES);
+  if (reviewed.length >= SWEEP_GAMES) return reviewed;
 
-function shuffled<T>(items: T[], seed: number): T[] {
-  const rnd = mulberry32(seed);
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
+  const held = new Set(reviewed.map((g) => g.id));
+  const rest = byDate.filter((g) => !held.has(g.id));
+  return [...reviewed, ...rest.slice(0, SWEEP_GAMES - reviewed.length)];
 }
-
-/** Days since the epoch — the seed that holds the selection steady for a day. */
-const today = () => Math.floor(Date.now() / 86_400_000);
 
 /** Every position of a game, starting position first, with its moves beside it. */
 function positionsOf(pgn: string) {
@@ -146,11 +144,13 @@ function positionsOf(pgn: string) {
 /**
  * Everything we know about how each game was played.
  *
- * Chess.com publishes an accuracy for games reviewed on the site, which is free
- * and instant, so those are taken as they come. The rest are reviewed here: a
- * background sweep works through the last twelve months on its own Stockfish
- * worker, filling the archive's accuracy column and — from the most recent
- * games — mining the day's puzzles out of the moves that went wrong.
+ * Chess.com publishes an accuracy for every game reviewed on the site, which is
+ * free and instant, so all of those are taken as they come and fill the
+ * archive's accuracy column immediately. Knowing the accuracy is not enough to
+ * drill a game, though — that needs the moves themselves — so a background
+ * sweep re-reads the twenty most recently reviewed games on its own Stockfish
+ * worker and mines the day's puzzles out of what went wrong in them. Any other
+ * game is reviewed only when the member asks for it.
  */
 export function ReviewsProvider({ children }: { children: React.ReactNode }) {
   const { games, profile, status } = useChessAccount();
@@ -362,8 +362,12 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
       // two, so the game can still be asked for in full later.
       if (!forDay) minedRef.current.add(game.id);
 
-      // Always file them under the game too, so "Solve" on that row has them
-      // whether they came from the daily pass or from the member asking.
+      // File them under the game too, so "Solve" on that row has them whether
+      // they came from the daily pass or from the member asking. The on-demand
+      // pass writes even when it found nothing — an empty entry is the answer
+      // to "is there anything in this game?", and the solver needs to be able
+      // to tell that apart from not having looked yet.
+      if (forDay && built.length === 0) return;
       setGamePuzzles((g) => {
         const held = g[game.id] ?? [];
         const merged = [...held];
@@ -521,22 +525,11 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     if (plannedForRef.current === me) return;
     plannedForRef.current = me;
 
-    // Fifty from the last twelve months: the twenty most recent — the puzzles
-    // come out of those — and a stable random draw from everything else.
-    const cutoff = Date.now() / 1000 - YEAR;
-    const recent = games
-      .filter((g) => g.endTime >= cutoff)
-      .sort((a, b) => b.endTime - a.endTime);
-    const head = recent.slice(0, PUZZLE_GAMES);
-    const tail = shuffled(recent.slice(PUZZLE_GAMES), today()).slice(
-      0,
-      Math.max(0, SWEEP_SIZE - head.length),
-    );
-
-    puzzleSetRef.current = new Set(head.map((g) => g.id));
-    queueRef.current = [...head, ...tail].map(
-      (g): Job => ({ id: g.id, kind: "review" }),
-    );
+    // The twenty Chess.com has already reviewed — the same set the day's
+    // puzzles are mined from.
+    const set = sweepSet(games);
+    puzzleSetRef.current = new Set(set.map((g) => g.id));
+    queueRef.current = set.map((g): Job => ({ id: g.id, kind: "review" }));
     if (queueRef.current.length === 0) return;
 
     setSweep({ target: queueRef.current.length, done: 0, running: true });

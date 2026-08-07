@@ -167,6 +167,15 @@ function GameRow({
               Solve
             </Link>
           </Button>
+        ) : g.reviewed ? (
+          // Reviewed with nothing in it — said out loud, because a dash beside
+          // an accuracy reads as a button that failed to render.
+          <span
+            className="text-2xs font-semibold text-ink-faint"
+            title="No mistakes to drill — you played this one cleanly"
+          >
+            Clean
+          </span>
         ) : (
           <span className="text-2xs font-semibold text-ink-faint">–</span>
         )}
@@ -210,10 +219,14 @@ export function RecentGames() {
         const review = reviews[g.id];
         row.accuracy = review?.accuracy ?? g.accuracies;
         row.reviewed = row.accuracy != null;
-        // Puzzles already built, or mistakes the review found that Solve can
-        // still turn into some.
+        // Puzzles already built, or mistakes our review found. A game only
+        // Chess.com has reviewed counts too — Solve reviews it on the spot,
+        // rather than showing an accuracy beside a dash.
         row.blindSpots =
-          mined[g.id] ?? (review?.status === "done" ? review.mistakes : 0);
+          mined[g.id] ??
+          (review?.source === "chesscom" && review.accuracy
+            ? 1
+            : (review?.mistakes ?? 0));
         return row;
       })
     : recentGames;
