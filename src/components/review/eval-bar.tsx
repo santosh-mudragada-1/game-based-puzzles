@@ -44,10 +44,18 @@ export function EvalBar({
   const blackPct = 100 - whitePct;
 
   const label = evalBarLabel(evalPawns, mate, result);
-  // The figure has to contrast with whatever ends up at the bottom, which a
-  // 100% fill can flip.
-  const bottomIsLight =
-    orientation === "white" ? whitePct > 6 : whitePct >= 100;
+  /*
+    Which end the figure belongs at.
+
+    Unsigned, so its position is what says whose advantage it is: it sits with
+    whoever is ahead. On a white-oriented board White is the bottom block, so a
+    positive evaluation writes at the bottom and a negative one at the top.
+  */
+  const whiteAhead = evalPawns >= 0;
+  const atBottom =
+    orientation === "white" ? whiteAhead : !whiteAhead;
+  // The figure has to contrast with whatever block it lands on.
+  const onLight = orientation === "white" ? whiteAhead : whiteAhead;
   // Blocks stack top -> bottom. For a White-oriented board White is on the
   // bottom; for a Black-oriented board the order flips.
   const whiteBlock = (
@@ -81,8 +89,9 @@ export function EvalBar({
           coloured to contrast with whichever side occupies the bottom block. */}
       <span
         className={cn(
-          "pointer-events-none absolute inset-x-0 bottom-[3px] text-center text-[10px] font-bold leading-none tabular-nums",
-          bottomIsLight ? "text-[#312e2b]" : "text-board-light",
+          "pointer-events-none absolute inset-x-0 text-center text-[10px] font-bold leading-none tabular-nums",
+          atBottom ? "bottom-[3px]" : "top-[3px]",
+          onLight ? "text-[#312e2b]" : "text-board-light",
         )}
       >
         {label}
@@ -93,8 +102,10 @@ export function EvalBar({
 
 /**
  * What the bar says: the game's result once it is over, "M3" while a forced
- * mate is on the board (unsigned — the fill already says whose it is), and a
- * signed pawn count otherwise.
+ * mate is on the board, and a pawn count otherwise.
+ *
+ * Never signed. The bar has two ends and the figure is written at the end that
+ * is winning, so a "+" or "−" in front of it is the same fact told twice.
  */
 export function evalBarLabel(
   evalPawns: number,
@@ -105,8 +116,5 @@ export function evalBarLabel(
   if (mate != null && mate !== 0) return `M${Math.abs(mate)}`;
   const magnitude = Math.abs(evalPawns);
   if (magnitude < 0.05) return "0.0";
-  const digits = magnitude >= 10 ? 0 : 1;
-  return evalPawns > 0
-    ? `+${evalPawns.toFixed(digits)}`
-    : `−${magnitude.toFixed(digits)}`;
+  return magnitude.toFixed(magnitude >= 10 ? 0 : 1);
 }

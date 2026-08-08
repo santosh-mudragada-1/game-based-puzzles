@@ -10,6 +10,9 @@ interface CoachBubbleProps {
   evalText?: string;
   /** Optional move classification badge shown before the text. */
   classification?: MoveClassification;
+  /** A heading above the line, with its own icon — used by the training list. */
+  title?: string;
+  titleIcon?: string;
   className?: string;
 }
 
@@ -23,6 +26,8 @@ export function CoachBubble({
   text,
   evalText,
   classification,
+  title,
+  titleIcon,
   className,
 }: CoachBubbleProps) {
   return (
@@ -41,6 +46,16 @@ export function CoachBubble({
           className="absolute -left-1.5 top-5 size-0 border-y-[7px] border-r-[9px] border-y-transparent border-r-white"
         />
         <div className="min-h-16 rounded-[10px] bg-white px-4 py-3">
+          {title && (
+            <div className="mb-1 flex items-center gap-1.5">
+              {titleIcon && (
+                <Image src={titleIcon} width={20} height={20} alt="" />
+              )}
+              <span className="font-display text-[16px] font-bold text-[#312e2b]">
+                {title}
+              </span>
+            </div>
+          )}
           <div className="flex items-start gap-1.5">
             {classification ? (
               <Image

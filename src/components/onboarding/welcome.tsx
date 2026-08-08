@@ -219,7 +219,7 @@ export function WelcomeFlow() {
               it swapped — small, but it happens right under the cursor and
               reads as the page flinching. Pinned, nothing moves but the words.
             */
-            className="flex w-full max-w-[440px] min-h-[524px] flex-col justify-center overflow-hidden rounded-[12px] border border-line/60 bg-surface shadow-pop"
+            className="flex w-full min-h-[496px] max-w-[440px] flex-col justify-start overflow-hidden rounded-[12px] border border-line/60 bg-surface shadow-pop"
             // No entrance. The card is the first thing on the page and it is
             // there in the markup, so animating it in would mean animating it
             // *after* it was already visible — which is the flinch people saw.
@@ -228,8 +228,8 @@ export function WelcomeFlow() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22 }}
           >
-            <div className="px-7 pb-7 pt-8">
-              <Logo height={26} />
+            <div className="px-7 pb-6 pt-7">
+              <Logo height={34} />
               <h2 className="mt-4 font-display text-[26px] font-black leading-none text-white">
                 {fetching
                   ? "Reading your games"

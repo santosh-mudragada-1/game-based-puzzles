@@ -4,8 +4,11 @@ import * as React from "react";
 import Image from "next/image";
 import { Heart, Lightbulb, ArrowLeft, ArrowRight, Share2 } from "lucide-react";
 
-import { ICON, moveTypeIcon } from "@/lib/assets";
+import { GAME_ICON, ICON, moveTypeIcon } from "@/lib/assets";
+import { useRouter } from "next/navigation";
 import { usePlan } from "@/hooks/use-plan";
+import { usePuzzleProgress } from "@/hooks/use-puzzle-progress";
+import { FREE_DAILY_LIMIT } from "@/data/solve-puzzles";
 import { Toast } from "@/components/shared/toast";
 import { ReviewBoard } from "@/components/review/review-board";
 import { PlaybackControls } from "@/components/review/playback-controls";
@@ -106,12 +109,15 @@ function topActions(c: MoveClassification): TopAction[] {
 
 function TopButton({
   green,
+  tone,
   active,
   icon,
   label,
   onClick,
 }: {
   green?: boolean;
+  /** "premium" is the blue upgrade button Chess.com uses for Diamond. */
+  tone?: "premium";
   active?: boolean;
   icon: React.ReactNode;
   label: string;
@@ -124,7 +130,9 @@ function TopButton({
       aria-pressed={active}
       className={cn(
         "flex h-11 flex-1 items-center justify-center gap-2 rounded-[8px] text-[15px] font-bold transition active:translate-y-px [&_svg]:size-[18px]",
-        green
+        tone === "premium"
+          ? "bg-gradient-to-b from-[#3aa2e0] to-[#1c86c6] text-white shadow-[0_1px_2px_rgba(0,0,0,0.16),inset_0_-1px_0_0_#1268a0] hover:brightness-[1.04]"
+          : green
           ? "bg-gradient-to-b from-brand to-[#5d9948] text-white shadow-[0_1px_2px_rgba(0,0,0,0.16),inset_0_-1px_0_0_#45753c] hover:brightness-[1.04]"
           : cn(
               "bg-[#3a3734] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_1px_2px_rgba(0,0,0,0.25)] hover:bg-[#454240]",
@@ -208,7 +216,9 @@ export function GameReview({
   analysing?: { done: number; total: number } | null;
   gameId?: string;
 } = {}) {
-  const { setPlan } = usePlan();
+  const router = useRouter();
+  const { plan, setPlan } = usePlan();
+  const { solved } = usePuzzleProgress();
   const N = model.plies.length;
   const notablePlies = React.useMemo(() => notablePliesOf(model), [model]);
   const [currentPly, setCurrentPly] = React.useState(0);
@@ -252,7 +262,10 @@ export function GameReview({
       switch (e.key) {
         case "ArrowRight":
           e.preventDefault();
-          seek(currentPly + 1);
+          // At the end of the game the arrow key does what the button does —
+          // walks the training list — rather than pressing against a wall.
+          if (currentPly >= N) goNextImportant();
+          else seek(currentPly + 1);
           break;
         case "ArrowLeft":
           e.preventDefault();
@@ -377,7 +390,15 @@ export function GameReview({
     text: string;
     classification?: MoveClassification;
     evalText?: string;
-  } = !ply
+    title?: string;
+    titleIcon?: string;
+  } = walkingTraining
+    ? {
+        text: TRAINING_ROWS[trainingStep].coach,
+        title: TRAINING_ROWS[trainingStep].label,
+        titleIcon: TRAINING_ROWS[trainingStep].icon,
+      }
+    : !ply
     ? { text: summaryText }
     : showingBest
       ? { text: `${bestMove!.san} was the best move here.`, classification: "best" }
@@ -397,6 +418,65 @@ export function GameReview({
     evalCp: p.evalCp,
     classification: p.classification,
   }));
+
+  /*
+    The buttons the training walk offers, per row.
+
+    Openings has nothing to sell and nothing to open, so Next takes the whole
+    width. The puzzles row leads with its own destination. The three locked
+    rows pair Next with Upgrade until the last of them, where there is nowhere
+    further to walk and Upgrade is the only thing left.
+  */
+  const trainingActions = () => {
+    const row = TRAINING_ROWS[trainingStep];
+    const next = (
+      <TopButton
+        key="next"
+        green
+        icon={<ArrowRight />}
+        label="Next"
+        onClick={goNextImportant}
+      />
+    );
+    const upgrade = (
+      <TopButton
+        key="upgrade"
+        tone="premium"
+        icon={<Image src={ICON.upgrade} width={18} height={18} alt="" />}
+        label="Upgrade"
+        onClick={() => setPlan("premium")}
+      />
+    );
+
+    if (row.key === "puzzles") {
+      // A free member who has spent the day's allowance can't solve any more,
+      // so offering the queue would walk them into the paywall. Offer the way
+      // past it instead.
+      const spent = plan === "free" && solved >= FREE_DAILY_LIMIT;
+      return [
+        spent ? (
+          upgrade
+        ) : (
+          <TopButton
+            key="solve"
+            icon={
+              <Image
+                src={GAME_ICON.gameBasedPuzzles}
+                width={18}
+                height={18}
+                alt=""
+              />
+            }
+            label="Solve Game Puzzles"
+            onClick={() => router.push("/puzzles/game-based")}
+          />
+        ),
+        next,
+      ];
+    }
+    if (row.locked) return trainingDone ? [upgrade] : [next, upgrade];
+    return [next];
+  };
 
   const renderAction = (a: TopAction) => {
     switch (a) {
@@ -538,9 +618,11 @@ export function GameReview({
                 text={coach.text}
                 classification={coach.classification}
                 evalText={coach.evalText}
+                title={coach.title}
+                titleIcon={coach.titleIcon}
               />
               <div className="flex items-stretch gap-2">
-                {actions.map(renderAction)}
+                {walkingTraining ? trainingActions() : actions.map(renderAction)}
               </div>
             </div>
 

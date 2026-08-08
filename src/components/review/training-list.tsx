@@ -24,17 +24,48 @@ export const TRAINING_ROWS: {
   icon: string;
   locked?: boolean;
   href?: string;
+  /** What the coach says while this row is the one being offered. */
+  coach: string;
 }[] = [
-  { key: "openings", label: "Openings", icon: NAV_ICON.learn },
+  {
+    key: "openings",
+    label: "Openings",
+    icon: NAV_ICON.learn,
+    coach:
+      "You're usually quite good at the beginning stages of a game. Something went wrong in this one.",
+  },
   {
     key: "puzzles",
     label: "Solve game puzzles",
     icon: GAME_ICON.gameBasedPuzzles,
     href: "/puzzles/game-based",
+    coach:
+      "The moments you got wrong in this game are waiting as puzzles. Same positions, same choices — this time with the answer still to find.",
   },
-  { key: "tactics", label: "Tactics", icon: NAV_ICON.puzzles, locked: true },
-  { key: "strategy", label: "Strategy", icon: NAV_ICON.train, locked: true },
-  { key: "endgames", label: "Endgames", icon: pieceImage("K"), locked: true },
+  {
+    key: "tactics",
+    label: "Tactics",
+    icon: NAV_ICON.puzzles,
+    locked: true,
+    coach:
+      "Go Diamond and get Advanced Stats to see the tactics you're best at.",
+  },
+  {
+    key: "strategy",
+    label: "Strategy",
+    icon: NAV_ICON.train,
+    locked: true,
+    coach:
+      "Want more tips? Diamond members get Advanced Stats for a personalized look at how to improve their strategy.",
+  },
+  {
+    key: "endgames",
+    label: "Endgames",
+    icon: pieceImage("K"),
+    locked: true,
+    coach:
+      "Become a Diamond member to get Advanced Stats and see where your endgame technique shines.",
+  },
 ];
 
 export function TrainingList({
@@ -74,9 +105,10 @@ export function TrainingList({
         );
         const shell = cn(
           "flex w-full items-center gap-3 rounded-[8px] px-4 py-3 text-left transition-colors",
-          lit
-            ? "bg-brand/15 ring-1 ring-brand/70"
-            : "bg-white/[0.04]",
+          // Lit is a lift, not an outline: the row the coach is talking about
+          // comes forward out of the list rather than being ringed like a
+          // form field.
+          lit ? "bg-white/[0.13]" : "bg-white/[0.04]",
         );
 
         if (r.href && !r.locked) {
