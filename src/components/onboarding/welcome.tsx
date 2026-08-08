@@ -203,14 +203,14 @@ export function WelcomeFlow() {
                 {fetching
                   ? "Reading your games"
                   : reviewing
-                    ? "Reviewing your games"
+                    ? "Analysing your last 10 games"
                     : "Connect your Chess.com"}
               </h2>
               <p className="mt-2.5 text-[14px] leading-snug text-ink-muted">
                 {fetching
                   ? "Pulling your archive straight from Chess.com so every puzzle comes from a game you actually played."
                   : reviewing
-                    ? "Stockfish is going through the games you had reviewed on Chess.com, looking for the moments worth replaying."
+                    ? "Stockfish is going through the ten most recent games you had reviewed on Chess.com, position by position, looking for the moments worth replaying."
                     : "Enter your Chess.com username and we'll pull your game history, then mine it for the mistakes worth drilling."}
               </p>
 
@@ -264,9 +264,11 @@ export function WelcomeFlow() {
                   {/* Say the quiet part out loud: this is a prototype doing real
                       engine work on this machine, and it is not quick. */}
                   <p className="mt-2.5 text-center text-[11.5px] leading-snug text-ink-faint">
-                    This is a feature prototype, not the real product — every
-                    position is analysed here in your browser, so building the
-                    puzzles takes a few minutes.
+                    This is a feature prototype for Chess.com, not the real
+                    product. On Chess.com your games are analysed on their
+                    servers before you ever open the page; here Stockfish runs
+                    in this browser tab and starts from scratch — which is why
+                    reading ten games takes minutes rather than being instant.
                   </p>
                 </div>
               ) : (

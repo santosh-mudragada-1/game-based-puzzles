@@ -670,6 +670,7 @@ export function PuzzleSolver() {
     target: queueTotal,
     days,
     day,
+    schedule,
   } = useActivePuzzles();
   const { version, setDay } = useVersion();
   const [calendarOpen, setCalendarOpen] = React.useState(false);
@@ -720,18 +721,13 @@ export function PuzzleSolver() {
   } = usePuzzleProgress();
   /** Days whose puzzles are all solved — the ticks on the calendar. */
   const clearedDays = React.useMemo(() => {
-    const byDay = new Map<string, { total: number; done: number }>();
-    for (const p of pool) {
-      if (!p.playedOn) continue;
-      const row = byDay.get(p.playedOn) ?? { total: 0, done: 0 };
-      row.total++;
-      if (record[p.id]?.startsWith("solved")) row.done++;
-      byDay.set(p.playedOn, row);
+    const out: string[] = [];
+    for (const [d, list] of schedule) {
+      if (list.length && list.every((p) => record[p.id]?.startsWith("solved")))
+        out.push(d);
     }
-    return [...byDay.entries()]
-      .filter(([, r]) => r.total > 0 && r.done === r.total)
-      .map(([d]) => d);
-  }, [pool, record]);
+    return out;
+  }, [schedule, record]);
 
   /** Furthest ply reached per puzzle (progress) — advances on each played move. */
   const [reached, setReached] = React.useState<Record<string, number>>({});

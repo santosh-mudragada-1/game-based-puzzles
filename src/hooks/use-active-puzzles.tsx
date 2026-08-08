@@ -5,6 +5,7 @@ import * as React from "react";
 import { useReviews, DAILY_PUZZLE_TARGET } from "@/hooks/use-reviews";
 import { useVersion, V1_WINDOW } from "@/hooks/use-version";
 import { CATEGORY_PLURAL, solvePuzzles } from "@/data/solve-puzzles";
+import { demoSchedule } from "@/lib/daily-demo";
 import type { PuzzleCategory, SolvePuzzle } from "@/types";
 
 export interface ActivePuzzles {
@@ -18,10 +19,12 @@ export interface ActivePuzzles {
   target: number;
   /** Theme rows for the start screen, counted from the queue itself. */
   categories: { category: PuzzleCategory; label: string; count: number }[];
-  /** v2: every day that produced puzzles, newest first. */
+  /** v2: every day that has puzzles, newest first. */
   days: string[];
   /** v2: the day on screen. */
   day: string | null;
+  /** v2: the whole month, so the calendar can tick off the days you've cleared. */
+  schedule: Map<string, SolvePuzzle[]>;
 }
 
 /**
@@ -39,12 +42,24 @@ export function useActivePuzzles(): ActivePuzzles {
   const { puzzles, pool, mining } = useReviews();
   const { version, day, setDay } = useVersion();
 
-  /** Days that produced puzzles, newest first. */
-  const days = React.useMemo(() => {
-    const seen = new Set<string>();
-    for (const p of pool) if (p.playedOn) seen.add(p.playedOn);
-    return [...seen].sort((a, b) => b.localeCompare(a));
-  }, [pool]);
+  /*
+    The v2 month.
+
+    Built from whatever real puzzles exist — mined ones once the sweep has found
+    any, the authored sample set before that — so this version has nothing to
+    wait for. It is a prototype of a shape, and the shape is legible whether or
+    not the dates it is drawn on are the ones you actually played.
+  */
+  const schedule = React.useMemo(
+    () => (version === "v2" ? demoSchedule(pool.length ? pool : solvePuzzles) : new Map<string, SolvePuzzle[]>()),
+    [version, pool],
+  );
+
+  /** Days that hold puzzles, newest first. */
+  const days = React.useMemo(
+    () => [...schedule.keys()].sort((a, b) => b.localeCompare(a)),
+    [schedule],
+  );
 
   // Land on the most recent day that has something in it. "Today" is only the
   // right default for somebody who played today; for everyone else it is an
@@ -54,15 +69,15 @@ export function useActivePuzzles(): ActivePuzzles {
     if (version === "v2" && day == null && days.length) setDay(days[0]);
   }, [version, day, days, setDay]);
 
-  const live = version === "v2" ? pool.length > 0 : puzzles.length > 0;
+  const live = version === "v2" ? days.length > 0 : puzzles.length > 0;
 
   const list = React.useMemo(() => {
-    if (!live) return solvePuzzles;
     if (version === "v2") {
-      return activeDay ? pool.filter((p) => p.playedOn === activeDay) : [];
+      return (activeDay && schedule.get(activeDay)) || [];
     }
+    if (!live) return solvePuzzles;
     return puzzles.slice(0, DAILY_PUZZLE_TARGET);
-  }, [live, version, activeDay, pool, puzzles]);
+  }, [live, version, activeDay, schedule, puzzles]);
 
   const categories = (Object.keys(CATEGORY_PLURAL) as PuzzleCategory[])
     .map((category) => ({
@@ -82,6 +97,7 @@ export function useActivePuzzles(): ActivePuzzles {
     categories,
     days,
     day: activeDay,
+    schedule,
   };
 }
 
