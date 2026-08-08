@@ -71,6 +71,7 @@ export function ArchivedReview() {
   return (
     <GameReview
       model={model}
+      gameId={game?.id}
       analysing={
         game
           ? { done: review?.done ?? 0, total: review?.total ?? 0 }

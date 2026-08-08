@@ -62,16 +62,24 @@ export function PuzzleProgressProvider({
   );
 
   const value = React.useMemo<PuzzleProgressValue>(() => {
-    const outcomes = Object.values(record);
+    /*
+      Counted against the day's queue, not against everything ever solved.
+
+      The record also holds puzzles solved from a single game's "Solve" button,
+      and puzzles that were in the set before it was re-ranked and are no longer
+      in it. Both are real outcomes worth keeping — but counting them against a
+      fifteen-puzzle day is how a meter ends up reading 16/15.
+    */
+    const outcomes = puzzles
+      .map((p) => record[p.id])
+      .filter((o): o is PuzzleOutcome => o != null);
     return {
       record,
       recordOutcome,
       solved: outcomes.filter((o) => o.startsWith("solved")).length,
       clean: outcomes.filter((o) => o === "solved-clean").length,
       attempted: outcomes.length,
-      unsolved: puzzles.filter(
-        (p) => record[p.id] && record[p.id] !== "solved-clean",
-      ).length,
+      unsolved: outcomes.filter((o) => o !== "solved-clean").length,
       total: target,
     };
   }, [record, recordOutcome, puzzles, target]);

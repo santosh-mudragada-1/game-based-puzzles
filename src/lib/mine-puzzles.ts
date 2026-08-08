@@ -3,6 +3,7 @@ import type { StockfishEngine } from "@/lib/engine";
 import { MATE_CP } from "@/lib/engine";
 import { REVIEW_LIMITS } from "@/lib/engine-settings";
 import { estimateDifficulty, type Standard, STANDARDS } from "@/lib/difficulty";
+import { dayKey } from "@/hooks/use-version";
 import type { Classified } from "@/lib/classify";
 import type {
   MoveClassification,
@@ -559,6 +560,7 @@ export async function buildPuzzle(
     opponent: c.source.opponent,
     opponentRating: c.source.opponentRating,
     gameId: c.source.gameId,
+    playedOn: dayKey(c.source.endTime),
     reviewPly: c.index + 1,
     archived: true,
   };

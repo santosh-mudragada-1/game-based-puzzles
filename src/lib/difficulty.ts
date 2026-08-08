@@ -70,6 +70,24 @@ export function estimateDifficulty(f: {
   return "hard";
 }
 
+/**
+ * The badge each lesson wears.
+ *
+ * Chess.com's art has fixed meanings — "??" is a blunder, the crossed circle is
+ * a miss — so the badge has to agree with the words next to it. A lesson about
+ * failing to punish something is a *miss*; one about handing material over is a
+ * blunder; letting a won position drift is a mistake.
+ */
+export const THEME_ICON: Record<PuzzleTheme, string> = {
+  "mate-attack": "/move-types/missed.png",
+  "winning-combination": "/move-types/missed.png",
+  "missed-tactic": "/move-types/missed.png",
+  "punish-mistake": "/move-types/missed.png",
+  "defensive-resource": "/move-types/blunder.png",
+  "blunder-prevention": "/move-types/blunder.png",
+  "endgame-conversion": "/move-types/mistake.png",
+};
+
 /** Human label for a theme, as a coach would name it. */
 export const THEME_LABEL: Record<PuzzleTheme, string> = {
   "mate-attack": "Mating attack",

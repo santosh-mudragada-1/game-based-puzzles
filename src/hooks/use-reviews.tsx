@@ -14,6 +14,7 @@ import {
   type MineSource,
 } from "@/lib/mine-puzzles";
 import { ratingOf, selectSet, STANDARDS } from "@/lib/difficulty";
+import { V1_WINDOW } from "@/hooks/use-version";
 import { useChessAccount } from "@/hooks/use-chess-account";
 import {
   loadReviewCache,
@@ -40,7 +41,7 @@ const SWEEP_LIMITS = REVIEW_LIMITS;
  * closes the gap, and it is a far better-aimed twenty than a random draw:
  * asking for a game review is itself a signal the member cared how it went.
  */
-const SWEEP_GAMES = 20;
+const SWEEP_GAMES = V1_WINDOW;
 
 /**
  * Games reviewed before the loading screen lets go.
@@ -50,13 +51,6 @@ const SWEEP_GAMES = 20;
  * on a game they haven't scrolled to yet.
  */
 export const FIRST_BATCH = 5;
-
-/**
- * Extra waves of twenty games taken on when the day comes up short, on top of
- * the first. Three waves is sixty games — past that the archive is old enough
- * that the mistakes in it are no longer the ones being made now.
- */
-const MAX_WAVES = 2;
 
 /** Puzzles built for the day. */
 export const DAILY_PUZZLE_TARGET = 15;
@@ -111,8 +105,10 @@ export interface SweepState {
 
 interface ReviewsValue {
   reviews: Record<string, GameReview>;
-  /** Today's puzzles, mined from the most recently reviewed games. */
+  /** The v1 set: the best of the window, ranked and capped. */
   puzzles: SolvePuzzle[];
+  /** Everything mined from the window — what v2 slices by day. */
+  pool: SolvePuzzle[];
   /** Puzzles built for one particular game, on request. */
   gamePuzzles: Record<string, SolvePuzzle[]>;
   /** True while the sweep is still looking for puzzles. */
@@ -212,6 +208,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
   const { games, profile, status } = useChessAccount();
   const [reviews, setReviews] = React.useState<Record<string, GameReview>>({});
   const [puzzles, setPuzzles] = React.useState<SolvePuzzle[]>([]);
+  const [pool, setPool] = React.useState<SolvePuzzle[]>([]);
   const [gamePuzzles, setGamePuzzles] = React.useState<
     Record<string, SolvePuzzle[]>
   >({});
@@ -262,8 +259,6 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
   ratingRef.current = ratingOf(profile);
   /** Which standard the miner is holding candidates to; 0 is the strictest. */
   const standardRef = React.useRef(0);
-  /** Extra twenty-game waves taken on to fill a short day. */
-  const wavesRef = React.useRef(0);
 
   reviewsRef.current = reviews;
 
@@ -451,6 +446,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     if (poolRef.current.some((p) => p.id === one.id)) return;
     poolRef.current = [...poolRef.current, one];
     puzzleCountRef.current = poolRef.current.length;
+    setPool(poolRef.current);
     setPuzzles(
       selectSet(poolRef.current, DAILY_PUZZLE_TARGET, ratingRef.current),
     );
@@ -532,39 +528,6 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
    * another. Called whenever work is added; lanes already running are left
    * alone and will pick the new job up on their own.
    */
-  /**
-   * Take in the next twenty already-reviewed games.
-   *
-   * Reached when the day has come up short. Twenty games do not always hold
-   * fifteen findable tactics, and the answer to that is more games rather than
-   * looser rules: another wave at the same standard adds puzzles of the same
-   * difficulty, where relaxing adds harder ones. Only when the archive runs out
-   * of reviewed games does the standard move. Returns false when there is
-   * nothing left to take.
-   */
-  const extendSweep = React.useCallback((): boolean => {
-    if (wavesRef.current >= MAX_WAVES) return false;
-    const next = [...gamesRef.current.values()]
-      .filter((g) => g.accuracies && !plannedIdsRef.current.has(g.id))
-      .sort((a, b) => b.endTime - a.endTime)
-      .slice(0, SWEEP_GAMES);
-    if (next.length === 0) return false;
-
-    wavesRef.current++;
-    for (const g of next) {
-      plannedIdsRef.current.add(g.id);
-      puzzleSetRef.current.add(g.id);
-      queueRef.current.push({ id: g.id, kind: "review" });
-    }
-    setSweep((s) => ({ ...s, target: s.target + next.length, running: true }));
-    setReviews((r) => {
-      const out = { ...r };
-      for (const g of next) out[g.id] = { ...(out[g.id] ?? blank()), status: "queued" };
-      return out;
-    });
-    return true;
-  }, []);
-
   /** Lets a lane restart the pool from inside its own loop, without a cycle. */
   const pumpRef = React.useRef<() => void>(() => {});
 
@@ -630,35 +593,20 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
           lane.busy = false;
           lane.current = null;
           if (aliveRef.current && lanesRef.current.every((l) => !l.busy)) {
-            // Everything queued is done. A short day is worth more work: first
-            // more games at the same standard, and only when the archive has no
-            // more reviewed games to give, the same games judged a rung looser.
-            if (puzzleCountRef.current < DAILY_PUZZLE_TARGET) {
-              if (extendSweep()) {
-                pumpRef.current();
-                return;
-              }
-              if (
-                standardRef.current < STANDARDS.length - 1 &&
-                puzzleSetRef.current.size > 0
-              ) {
-                standardRef.current++;
-                for (const id of puzzleSetRef.current) {
-                  if (rowsRef.current[id]?.length)
-                    queueRef.current.push({ id, kind: "mine", forDay: true });
-                }
-                if (queueRef.current.length) {
-                  pumpRef.current();
-                  return;
-                }
-              }
-            }
+            /*
+              Done means done.
+
+              The window is a fixed ten games and the standard does not move.
+              Reaching further into the archive, or judging the same games more
+              leniently, were both ways of hitting a number — and the number is
+              not the point. Ten games contain what they contain.
+            */
             setSweep((s) => ({ ...s, running: false }));
           }
         }
       })();
     }
-  }, [analyse, mine, lanes, extendSweep]);
+  }, [analyse, mine, lanes]);
 
   pumpRef.current = pump;
 
@@ -746,8 +694,8 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
       firstBatchRef.current = new Set();
       queuedRef.current = 0;
       standardRef.current = 0;
-      wavesRef.current = 0;
       poolRef.current = [];
+      setPool([]);
       puzzleCountRef.current = 0;
       rowsRef.current = {};
       setReviews({});
@@ -781,6 +729,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
         }
         for (const id of cached.mined) minedRef.current.add(id);
         poolRef.current = cached.puzzles;
+        setPool(cached.puzzles);
         puzzleCountRef.current = cached.puzzles.length;
         setReviews(restored);
         setPuzzles(cached.puzzles);
@@ -919,13 +868,14 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     () => ({
       reviews,
       puzzles,
+      pool,
       gamePuzzles,
       mining: sweep.running && puzzles.length < DAILY_PUZZLE_TARGET,
       sweep,
       request,
       requestPuzzles,
     }),
-    [reviews, puzzles, gamePuzzles, sweep, request, requestPuzzles],
+    [reviews, puzzles, pool, gamePuzzles, sweep, request, requestPuzzles],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

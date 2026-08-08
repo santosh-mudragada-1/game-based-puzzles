@@ -37,6 +37,8 @@ import {
   coachIntro,
 } from "@/data/solve-puzzles";
 import { useActivePuzzles } from "@/hooks/use-active-puzzles";
+import { useVersion, V1_WINDOW } from "@/hooks/use-version";
+import { DayPicker } from "@/components/puzzles/day-picker";
 import { useChessAccount } from "@/hooks/use-chess-account";
 import { useOpponents } from "@/hooks/use-opponents";
 import { useReviews } from "@/hooks/use-reviews";
@@ -62,7 +64,6 @@ import {
   fenAfterMove,
   pieceAt,
 } from "@/lib/puzzle";
-import { useEngineEval } from "@/hooks/use-engine-eval";
 import { MATE_CP } from "@/lib/engine";
 import type {
   PieceColor,
@@ -72,7 +73,7 @@ import type {
   PuzzleOutcome,
   SolvePuzzle,
 } from "@/types";
-import { THEME_LABEL } from "@/lib/difficulty";
+import { THEME_ICON, THEME_LABEL } from "@/lib/difficulty";
 import { cn } from "@/lib/utils";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -160,8 +161,16 @@ function PanelHeader({ onBack }: { onBack: () => void }) {
   );
 }
 
-function ProgressRow({ completed, total }: { completed: number; total: number }) {
-  const pct = Math.min(100, Math.round((completed / total) * 100));
+function ProgressRow({
+  completed,
+  total,
+  noun = "completed",
+}: {
+  completed: number;
+  total: number;
+  noun?: string;
+}) {
+  const pct = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
   return (
     <div className="flex items-center gap-3">
       <Image src={GAME_ICON.gameBasedPuzzles} width={28} height={28} alt="" />
@@ -170,7 +179,7 @@ function ProgressRow({ completed, total }: { completed: number; total: number })
           <span className="font-bold text-white tabular-nums">
             {completed}/{total}
           </span>{" "}
-          completed
+          {noun}
         </p>
         <div className="mt-2 h-3 overflow-hidden rounded-[10px] bg-white/10">
           <div
@@ -480,6 +489,9 @@ function StartView({
   categories,
   intro,
   total,
+  dayPicker,
+  dayCalendar,
+  progressNoun,
 }: {
   onStart: (category: PuzzleCategory | null) => void;
   /**
@@ -498,9 +510,16 @@ function StartView({
   categories: { category: PuzzleCategory; label: string; count: number }[];
   intro: string;
   total: number;
+  /** v2 only: the day stepper, above the coach. */
+  dayPicker?: React.ReactNode;
+  /** v2 only: the month, which opens beneath the coach as in the design. */
+  dayCalendar?: React.ReactNode;
+  /** What the bottom meter is counting — "today's puzzles" in v2. */
+  progressNoun?: string;
 }) {
   return (
     <>
+      {dayPicker}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4 scrollbar-thin">
         <CoachBubble
           text={
@@ -511,6 +530,8 @@ function StartView({
               : intro
           }
         />
+
+        {dayCalendar}
 
         {progress && (
           <div className="flex gap-2">
@@ -557,6 +578,7 @@ function StartView({
         <ProgressRow
           completed={progress ? progress.done : 0}
           total={progress ? progress.total : total}
+          noun={progressNoun}
         />
         <button
           type="button"
@@ -583,7 +605,11 @@ function ClassificationTag({ puzzle }: { puzzle: SolvePuzzle }) {
   return (
     <div className="flex items-center gap-2 rounded-[8px] bg-black/20 p-3">
       <Image
-        src={CATEGORY_ICON[puzzle.category]}
+        src={
+          puzzle.theme
+            ? THEME_ICON[puzzle.theme]
+            : CATEGORY_ICON[puzzle.category]
+        }
         width={22}
         height={22}
         alt=""
@@ -642,10 +668,14 @@ export function PuzzleSolver() {
     live,
     mining,
     target: queueTotal,
+    days,
+    day,
   } = useActivePuzzles();
+  const { version, setDay } = useVersion();
+  const [calendarOpen, setCalendarOpen] = React.useState(false);
   /** "Solve" on a row of the archive opens straight into that game's puzzles. */
   const gameFilter = useSearchParams().get("game");
-  const { gamePuzzles, requestPuzzles } = useReviews();
+  const { gamePuzzles, requestPuzzles, pool } = useReviews();
   const { profile } = useChessAccount();
   const { opponents } = useOpponents(8);
 
@@ -688,6 +718,21 @@ export function PuzzleSolver() {
     attempted: attemptedTotal,
     unsolved: unsolvedCount,
   } = usePuzzleProgress();
+  /** Days whose puzzles are all solved — the ticks on the calendar. */
+  const clearedDays = React.useMemo(() => {
+    const byDay = new Map<string, { total: number; done: number }>();
+    for (const p of pool) {
+      if (!p.playedOn) continue;
+      const row = byDay.get(p.playedOn) ?? { total: 0, done: 0 };
+      row.total++;
+      if (record[p.id]?.startsWith("solved")) row.done++;
+      byDay.set(p.playedOn, row);
+    }
+    return [...byDay.entries()]
+      .filter(([, r]) => r.total > 0 && r.done === r.total)
+      .map(([d]) => d);
+  }, [pool, record]);
+
   /** Furthest ply reached per puzzle (progress) — advances on each played move. */
   const [reached, setReached] = React.useState<Record<string, number>>({});
   /** The ply currently being viewed (≤ reached) — scrubbed with ←/→ to analyse. */
@@ -720,6 +765,11 @@ export function PuzzleSolver() {
     line[reachedPly]?.side === userSide;
 
   const currentFen = vp === 0 ? (puzzle?.fen ?? START_FEN) : line[vp - 1].fen;
+  /** The line's length and position counted in the solver's moves alone. */
+  const userMoveTotal = line.filter((p) => p.side === userSide).length;
+  const userMoveNo = line
+    .slice(0, vp)
+    .filter((p) => p.side === userSide).length;
   const lastSolvedFen = line.length ? line[line.length - 1].fen : (puzzle?.fen ?? START_FEN);
 
   /* ---- Evaluation (Stockfish) -------------------------------------------
@@ -751,12 +801,18 @@ export function PuzzleSolver() {
     return { cp: best.cp, mate: best.mate };
   }, [line]);
 
-  const peakEval = useEngineEval(puzzle?.fen ?? null, userSide, {
-    enabled: view === "run" && puzzle != null,
-    fallback: authoredPeak,
-    resetKey: puzzle?.id,
-    channel: "puzzle-peak",
-  });
+  /*
+    The bar reads the puzzle's own numbers, not a live search.
+
+    Every position on this screen was already scored by Stockfish when the
+    puzzle was built — the position before the mistake, the one the mistake led
+    to, and every ply of the solution. Re-asking the engine at solve time added
+    nothing except a second opinion arriving a few seconds late, at a slightly
+    different depth, which the bar then animated to. That is the jump with no
+    move behind it: not the position changing, just the engine changing its mind
+    about a position nobody had touched.
+  */
+  const peakEval = authoredPeak;
 
   // At the start the bar reads the position the played move led to (the board
   // still shows the moment before it, with the orange arrow); after that it
@@ -766,40 +822,18 @@ export function PuzzleSolver() {
   // stepping back to the start shows the position as it stood — not the wreck
   // the played move made of it. Otherwise scrubbing back would re-open the gap
   // and replay the red "you threw it away" band on a puzzle already put right.
-  const barFen = vp === 0 ? (solved ? puzzle?.fen ?? null : playedFen) : line[vp - 1].fen;
-  const authoredCurrent =
+  const barEval =
     vp === 0
       ? solved
         ? authoredPeak
         : { cp: puzzle?.start.cp ?? 0, mate: puzzle?.start.mate ?? null }
       : { cp: line[vp - 1].cp, mate: line[vp - 1].mate };
-  const barEval = useEngineEval(barFen, userSide, {
-    enabled: view === "run" && puzzle != null,
-    fallback: authoredCurrent,
-    resetKey: puzzle?.id,
-    channel: "puzzle-bar",
-  });
 
-  // The hook holds the *previous* ply's score while the next one is searched,
-  // which past the first move means the bar briefly shows the pre-move number
-  // against the new peak — a red gap flashing open on the very move that closed
-  // it. The authored (engine-verified) score for the ply stands in until the
-  // live search lands.
-  const barSettled = barEval.settled || barEval.failed;
-  const shownCp = vp === 0 || barSettled ? barEval.cp : authoredCurrent.cp;
-  const shownMate = vp === 0 || barSettled ? barEval.mate : authoredCurrent.mate;
+  const shownCp = barEval.cp;
+  const shownMate = barEval.mate;
 
-  /**
-   * The bar never waits for the engine.
-   *
-   * Both numbers are already known — mining verified them with Stockfish and
-   * stored them with the puzzle — so holding the bar at "what was available"
-   * until two fresh five-second searches come back meant the red band opened
-   * several seconds after the board did, on a puzzle the solver had already
-   * started thinking about. The live search still runs and still refines what
-   * is shown; it just no longer decides when the bar is allowed to be true.
-   */
-  const barReady = vp > 0 || puzzle != null;
+  /** Nothing left to wait for — the numbers were known before the screen drew. */
+  const barReady = puzzle != null;
 
   /**
    * How far into the queue this member may go. The counters still read against
@@ -1244,7 +1278,10 @@ export function PuzzleSolver() {
           ? coachIntro
           : mining
             ? `${queue.length} ready so far — still reviewing your games for more.`
-            : `${queue.length} puzzles from the mistakes in your recent games.`;
+            : version === "v2"
+              ? // The diary reading: one day's chess, and what it left behind.
+                `${queue.length} ${queue.length === 1 ? "puzzle" : "puzzles"} generated from your games that day.`
+              : `${queue.length} ${queue.length === 1 ? "puzzle" : "puzzles"} from your last ${V1_WINDOW} games.`;
 
   const coachText = !puzzle
     ? intro
@@ -1292,8 +1329,11 @@ export function PuzzleSolver() {
                 key={puzzle.id}
                 cp={shownCp}
                 label={evalLabel(shownCp, shownMate, shownMate === 0, userSide)}
+                mate={shownMate}
                 peakCp={anchorPeak ? peakEval.cp : undefined}
                 peakLabel={anchorPeak ? peakLabel : undefined}
+                peakMate={anchorPeak ? peakEval.mate : undefined}
+                decided={shownMate === 0}
                 loop={anchorPeak}
                 step={`${puzzle.id}:${vp}`}
                 isUserMove={vp > 0 && line[vp - 1]?.side === userSide}
@@ -1355,6 +1395,35 @@ export function PuzzleSolver() {
             categories={categories}
             intro={intro}
             total={queueTotal}
+            progressNoun={
+              version === "v2" ? "completed from this day's puzzles" : "completed"
+            }
+            dayPicker={
+              version === "v2" && live ? (
+                <DayPicker
+                  part="stepper"
+                  day={day}
+                  days={days}
+                  cleared={clearedDays}
+                  onPick={setDay}
+                  open={calendarOpen}
+                  onOpenChange={setCalendarOpen}
+                />
+              ) : undefined
+            }
+            dayCalendar={
+              version === "v2" && live ? (
+                <DayPicker
+                  part="calendar"
+                  day={day}
+                  days={days}
+                  cleared={clearedDays}
+                  onPick={setDay}
+                  open={calendarOpen}
+                  onOpenChange={setCalendarOpen}
+                />
+              ) : undefined
+            }
           />
         )}
 
@@ -1399,7 +1468,10 @@ export function PuzzleSolver() {
                     <ChevronLeft className="size-4" />
                   </button>
                   <span className="min-w-[64px] text-center tabular-nums">
-                    {vp === 0 ? "Start" : `Move ${vp} / ${line.length}`}
+                    {/* Counted in the solver's own moves. The opponent's replies
+                        auto-play and are never asked for, so counting them makes
+                        a two-move puzzle announce itself as four. */}
+                    {vp === 0 ? "Start" : `Move ${userMoveNo} / ${userMoveTotal}`}
                   </span>
                   <button
                     type="button"

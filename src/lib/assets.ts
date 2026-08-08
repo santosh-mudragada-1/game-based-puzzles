@@ -64,6 +64,11 @@ export const NAV_ICON = {
   watch: "/sidebar-icons/Watch.png",
   news: "/sidebar-icons/News.png",
   community: "/sidebar-icons/Community.png",
+  /** The footer cluster, exported from the Figma nav bar rather than approximated. */
+  friends: "/nav-icons/friends.svg",
+  mail: "/nav-icons/mail.svg",
+  bell: "/nav-icons/bell.svg",
+  settings: "/nav-icons/settings.svg",
 };
 
 /** Official Chess.com glyphs from /public/misc (baked-in brand colors). */

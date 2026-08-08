@@ -17,6 +17,22 @@ import { cn } from "@/lib/utils";
 /** The six pieces, cycling — a loader made of the thing being loaded. */
 const LOADER_PIECES = ["P", "N", "B", "R", "Q", "K"];
 
+/**
+ * Things worth knowing, one at a time, while the engine works.
+ *
+ * A progress bar with nothing to read beside it makes two minutes feel like
+ * five. These are all true of what is happening on the other side of the bar,
+ * so reading them is also being told what the wait is for.
+ */
+const WAIT_NOTES = [
+  "Stockfish is scoring every position of every game — around eighty per game, each one searched on its own worker thread.",
+  "Only the games you had reviewed on Chess.com are read. Asking for a review is itself a signal you cared how that game went.",
+  "A mistake is only made into a puzzle if missing it actually cost you the game. Declining a faster mate is not a mistake worth drilling.",
+  "A collapse counts once. If one move led to four disasters, the puzzle is the move that would have prevented all of them.",
+  "The solution stops where the lesson does — checkmate for a mating attack, a won piece for a combination. No engine filler.",
+  "Everything is worked out once and kept, so the next time you open this it will already be here.",
+];
+
 function PieceLoader() {
   return (
     <div className="flex items-end justify-center gap-1.5" aria-hidden>
@@ -57,6 +73,8 @@ export function WelcomeFlow() {
   const { sweep } = useReviews();
 
   const [value, setValue] = React.useState("");
+  /** Which note is on screen; they rotate while the bar fills. */
+  const [fact, setFact] = React.useState(0);
   const [tourDone, setTourDone] = React.useState(false);
   /** True once the member has connected from this screen — a remembered
    *  username reconnects quietly and shouldn't be told the story again. */
@@ -69,8 +87,18 @@ export function WelcomeFlow() {
   const reviewing = firstBatch > 0 && sweep.done < firstBatch;
   const busy = fetching || reviewing;
 
+  /*
+    "connect" is also what this renders before the client knows anything.
+
+    Waiting for `ready` meant the page was blank until the JavaScript had
+    downloaded, parsed and run — two and a half seconds on a throttled machine —
+    and only then did the card animate in, often under the first keystroke of
+    someone who had started typing the moment it appeared. Rendering the form as
+    the page's own markup puts it on screen with the HTML instead. Anyone with a
+    remembered account is held on their own page by the gate and never sees this.
+  */
   const phase: "connect" | "loading" | "tour" | null = !ready
-    ? null
+    ? "connect"
     : busy
       ? "loading"
       : !profile
@@ -90,6 +118,14 @@ export function WelcomeFlow() {
   React.useEffect(() => {
     if (ready && phase === null) leave();
   }, [ready, phase, leave]);
+
+  React.useEffect(() => {
+    const t = setInterval(
+      () => setFact((f) => (f + 1) % WAIT_NOTES.length),
+      6500,
+    );
+    return () => clearInterval(t);
+  }, []);
 
   // Bring back whatever was typed before the tab reloaded, caret at the end.
   React.useEffect(() => {
@@ -155,8 +191,9 @@ export function WelcomeFlow() {
           <motion.div
             key="card"
             className="w-full max-w-[440px] overflow-hidden rounded-[12px] border border-line/60 bg-surface shadow-pop"
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
+            // No entrance. The card is the first thing on the page and it is
+            // there in the markup, so animating it in would mean animating it
+            // *after* it was already visible — which is the flinch people saw.
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 380, damping: 30 }}
           >
@@ -209,9 +246,27 @@ export function WelcomeFlow() {
                     )}
                   </div>
 
-                  {/* Say the quiet part out loud: this is real engine work. */}
-                  <p className="mt-5 rounded-[8px] bg-black/25 px-3.5 py-3 text-center text-[12.5px] font-semibold text-ink-soft">
-                    This can take a minute or two
+                  {/* Something true to read while the engine works, changing
+                      often enough to be worth looking at. */}
+                  <AnimatePresence mode="wait">
+                    <motion.p
+                      key={fact}
+                      className="mt-5 min-h-[64px] rounded-[8px] bg-black/25 px-3.5 py-3 text-center text-[12.5px] font-medium leading-relaxed text-ink-soft"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      {WAIT_NOTES[fact]}
+                    </motion.p>
+                  </AnimatePresence>
+
+                  {/* Say the quiet part out loud: this is a prototype doing real
+                      engine work on this machine, and it is not quick. */}
+                  <p className="mt-2.5 text-center text-[11.5px] leading-snug text-ink-faint">
+                    This is a feature prototype, not the real product — every
+                    position is analysed here in your browser, so building the
+                    puzzles takes a few minutes.
                   </p>
                 </div>
               ) : (

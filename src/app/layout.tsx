@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { PlanProvider } from "@/hooks/use-plan";
+import { VersionProvider } from "@/hooks/use-version";
 import { PuzzleProgressProvider } from "@/hooks/use-puzzle-progress";
 import { ChessAccountProvider } from "@/hooks/use-chess-account";
 import { ReviewsProvider } from "@/hooks/use-reviews";
@@ -40,6 +41,8 @@ export default function RootLayout({
           {/* Reviews the archive in the background; the puzzles come out of it. */}
           <ReviewsProvider>
             <PlanProvider>
+              {/* Which shape of the feature is being tried — v1 or v2. */}
+              <VersionProvider>
               <PuzzleProgressProvider>
                 {/*
                   Nothing of the app renders until there is a real account
@@ -49,6 +52,7 @@ export default function RootLayout({
                 */}
                 <AppGate>{children}</AppGate>
               </PuzzleProgressProvider>
+              </VersionProvider>
             </PlanProvider>
           </ReviewsProvider>
         </ChessAccountProvider>

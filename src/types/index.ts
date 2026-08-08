@@ -349,6 +349,8 @@ export interface SolvePuzzle {
   difficulty?: PuzzleDifficulty;
   /** Why this moment was made a puzzle, in a sentence. */
   why?: string;
+  /** Day the source game was played (YYYY-MM-DD, local) — what v2 groups by. */
+  playedOn?: string;
   /** Source-game context. */
   opponent: string;
   opponentRating: number;

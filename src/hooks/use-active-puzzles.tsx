@@ -1,0 +1,89 @@
+"use client";
+
+import * as React from "react";
+
+import { useReviews, DAILY_PUZZLE_TARGET } from "@/hooks/use-reviews";
+import { useVersion, V1_WINDOW } from "@/hooks/use-version";
+import { CATEGORY_PLURAL, solvePuzzles } from "@/data/solve-puzzles";
+import type { PuzzleCategory, SolvePuzzle } from "@/types";
+
+export interface ActivePuzzles {
+  /** The queue every counter in the app is measured against. */
+  puzzles: SolvePuzzle[];
+  /** True when these came out of the member's own games rather than the sample set. */
+  live: boolean;
+  /** Still being mined out of the reviewed games. */
+  mining: boolean;
+  /** Puzzles the set is aiming for. */
+  target: number;
+  /** Theme rows for the start screen, counted from the queue itself. */
+  categories: { category: PuzzleCategory; label: string; count: number }[];
+  /** v2: every day that produced puzzles, newest first. */
+  days: string[];
+  /** v2: the day on screen. */
+  day: string | null;
+}
+
+/**
+ * The puzzles on offer right now.
+ *
+ * Two versions read the same mined pool differently. **v1** takes the best of
+ * the last ten games as one standing set. **v2** treats the pool as a diary and
+ * hands back the puzzles from the games played on one particular day, so the
+ * set is as long as that day's chess deserved — no target, no padding.
+ *
+ * With no account (or before the first game is read) the authored sample set
+ * stands in, so the flow is never empty.
+ */
+export function useActivePuzzles(): ActivePuzzles {
+  const { puzzles, pool, mining } = useReviews();
+  const { version, day, setDay } = useVersion();
+
+  /** Days that produced puzzles, newest first. */
+  const days = React.useMemo(() => {
+    const seen = new Set<string>();
+    for (const p of pool) if (p.playedOn) seen.add(p.playedOn);
+    return [...seen].sort((a, b) => b.localeCompare(a));
+  }, [pool]);
+
+  // Land on the most recent day that has something in it. "Today" is only the
+  // right default for somebody who played today; for everyone else it is an
+  // empty screen that makes the feature look broken.
+  const activeDay = day ?? days[0] ?? null;
+  React.useEffect(() => {
+    if (version === "v2" && day == null && days.length) setDay(days[0]);
+  }, [version, day, days, setDay]);
+
+  const live = version === "v2" ? pool.length > 0 : puzzles.length > 0;
+
+  const list = React.useMemo(() => {
+    if (!live) return solvePuzzles;
+    if (version === "v2") {
+      return activeDay ? pool.filter((p) => p.playedOn === activeDay) : [];
+    }
+    return puzzles.slice(0, DAILY_PUZZLE_TARGET);
+  }, [live, version, activeDay, pool, puzzles]);
+
+  const categories = (Object.keys(CATEGORY_PLURAL) as PuzzleCategory[])
+    .map((category) => ({
+      category,
+      label: CATEGORY_PLURAL[category],
+      count: list.filter((p) => p.category === category).length,
+    }))
+    .filter((c) => c.count > 0);
+
+  return {
+    puzzles: list,
+    live,
+    mining,
+    // Both versions report what the games actually held. There is no daily
+    // quota to fall short of any more — a day is as long as it is.
+    target: list.length,
+    categories,
+    days,
+    day: activeDay,
+  };
+}
+
+/** Games a v1 set is drawn from — quoted in the copy, so it lives with it. */
+export { V1_WINDOW };

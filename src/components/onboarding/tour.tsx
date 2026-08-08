@@ -267,7 +267,15 @@ export function Tour({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="flex w-full max-w-[860px] flex-col items-center px-6">
-      <div className="grid w-full items-center gap-10 md:grid-cols-[300px_minmax(0,1fr)]">
+      {/*
+        A fixed height for the whole step, not one that hugs its contents.
+
+        The three screens have different amounts of copy, so a hugging container
+        changed height between them and the pager and Next button jumped up and
+        down as you advanced — the one control you are aiming at moving out from
+        under the cursor.
+      */}
+      <div className="grid w-full items-center gap-10 md:h-[360px] md:grid-cols-[300px_minmax(0,1fr)]">
         {/* Art */}
         <div className="order-2 mx-auto w-full max-w-[300px] md:order-1">
           <AnimatePresence mode="wait">
@@ -283,8 +291,8 @@ export function Tour({ onDone }: { onDone: () => void }) {
           </AnimatePresence>
         </div>
 
-        {/* Copy */}
-        <div className="order-1 min-w-0 md:order-2">
+        {/* Copy — a floor under the tallest of the three, so nothing below moves. */}
+        <div className="order-1 min-w-0 md:order-2 md:h-[260px]">
           <AnimatePresence mode="wait">
             <motion.div
               key={step.key}
@@ -347,15 +355,22 @@ export function Tour({ onDone }: { onDone: () => void }) {
         </button>
       </div>
 
-      {!last && (
-        <button
-          type="button"
-          onClick={onDone}
-          className="mt-4 text-[13px] font-semibold text-ink-soft transition-colors hover:text-ink"
-        >
-          Skip
-        </button>
-      )}
+      {/* Kept in the layout on the last step, just not shown. Removing it
+          outright re-centred the whole column and shifted the pager and Next
+          button down by the height of this one line — on the step where the
+          button changes to "Start solving" and is most likely to be aimed at. */}
+      <button
+        type="button"
+        onClick={onDone}
+        aria-hidden={last}
+        tabIndex={last ? -1 : 0}
+        className={cn(
+          "mt-4 text-[13px] font-semibold text-ink-soft transition-colors hover:text-ink",
+          last && "pointer-events-none invisible",
+        )}
+      >
+        Skip
+      </button>
     </div>
   );
 }

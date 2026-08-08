@@ -2,15 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import {
-  ChevronDown,
-  Search,
-  Users2,
-  Mail,
-  Bell,
-  Settings,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronDown, Search, type LucideIcon } from "lucide-react";
 import { Logo } from "@/components/shared/logo";
 import { Avatar } from "@/components/shared/avatar";
 import { PlanSwitcher } from "@/components/shared/plan-switcher";
@@ -214,11 +206,12 @@ function NavItemRow({
 }
 
 function FooterIcon({
-  icon: Icon,
+  src,
   label,
   badge,
 }: {
-  icon: LucideIcon;
+  /** The exported Figma glyph — these four are drawn, not iconographic guesses. */
+  src: string;
   label: string;
   badge?: number;
 }) {
@@ -226,9 +219,9 @@ function FooterIcon({
     <button
       type="button"
       aria-label={label}
-      className="relative grid size-9 place-items-center rounded-[6px] text-ink-soft transition-colors hover:bg-white/[0.05] hover:text-ink"
+      className="relative grid size-9 place-items-center rounded-[6px] opacity-70 transition-opacity hover:opacity-100"
     >
-      <Icon className="size-5" strokeWidth={2} />
+      <Image src={src} width={20} height={20} alt="" className="size-5" />
       {badge ? (
         <span className="absolute right-1 top-1 grid min-w-[15px] place-items-center rounded-full bg-loss px-1 text-[9px] font-bold leading-[14px] text-white">
           {badge}
@@ -319,10 +312,10 @@ export function Sidebar({
         <AccountMenu onNavigate={onNavigate} />
 
         <div className="mt-1 flex items-center justify-between px-1">
-          <FooterIcon icon={Users2} label="Friends" />
-          <FooterIcon icon={Mail} label="Messages" />
-          <FooterIcon icon={Bell} label="Notifications" badge={1} />
-          <FooterIcon icon={Settings} label="Settings" />
+          <FooterIcon src={NAV_ICON.friends} label="Friends" />
+          <FooterIcon src={NAV_ICON.mail} label="Messages" />
+          <FooterIcon src={NAV_ICON.bell} label="Notifications" badge={1} />
+          <FooterIcon src={NAV_ICON.settings} label="Settings" />
         </div>
       </div>
     </nav>

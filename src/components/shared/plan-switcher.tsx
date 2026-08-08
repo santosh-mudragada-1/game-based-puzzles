@@ -3,9 +3,10 @@
 import * as React from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, FlaskConical } from "lucide-react";
+import { CalendarDays, Check, FlaskConical, Layers } from "lucide-react";
 
 import { usePlan } from "@/hooks/use-plan";
+import { useVersion, type PuzzleVersion, V1_WINDOW } from "@/hooks/use-version";
 import { ICON } from "@/lib/assets";
 import { cn } from "@/lib/utils";
 import type { PlanTier } from "@/types";
@@ -13,6 +14,12 @@ import type { PlanTier } from "@/types";
 const OPTIONS: { plan: PlanTier; label: string; blurb: string }[] = [
   { plan: "free", label: "Free Plan", blurb: "3 puzzles a day" },
   { plan: "premium", label: "Premium Plan", blurb: "The whole queue" },
+];
+
+/** The two ways of deciding which games become puzzles, side by side. */
+const VERSIONS: { version: PuzzleVersion; label: string; blurb: string }[] = [
+  { version: "v1", label: "V1 · Rolling window", blurb: `Your last ${V1_WINDOW} games` },
+  { version: "v2", label: "V2 · Daily puzzles", blurb: "One day at a time" },
 ];
 
 /**
@@ -25,6 +32,7 @@ const OPTIONS: { plan: PlanTier; label: string; blurb: string }[] = [
  */
 export function PlanSwitcher({ onNavigate }: { onNavigate?: () => void }) {
   const { plan, setPlan } = usePlan();
+  const { version, setVersion } = useVersion();
   const [open, setOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement>(null);
 
@@ -98,6 +106,48 @@ export function PlanSwitcher({ onNavigate }: { onNavigate?: () => void }) {
                       </span>
                       <span className="block text-[11px] text-ink-soft">
                         {o.blurb}
+                      </span>
+                    </span>
+                    {active && <Check className="size-4 shrink-0 text-brand" />}
+                  </button>
+                );
+              })}
+
+              {/* The second thing worth trying on the same account. */}
+              <p className="mt-1 border-t border-line/50 px-2 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+                Puzzle version
+              </p>
+              {VERSIONS.map((v) => {
+                const active = version === v.version;
+                return (
+                  <button
+                    key={v.version}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={active}
+                    onClick={() => {
+                      setVersion(v.version);
+                      setOpen(false);
+                      onNavigate?.();
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-[7px] px-2 py-2 text-left transition-colors",
+                      active ? "bg-white/[0.07]" : "hover:bg-white/[0.05]",
+                    )}
+                  >
+                    <span className="grid size-[18px] shrink-0 place-items-center">
+                      {v.version === "v2" ? (
+                        <CalendarDays className="size-[15px] text-ink-soft" />
+                      ) : (
+                        <Layers className="size-[15px] text-ink-soft" />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-bold text-ink">
+                        {v.label}
+                      </span>
+                      <span className="block text-[11px] text-ink-soft">
+                        {v.blurb}
                       </span>
                     </span>
                     {active && <Check className="size-4 shrink-0 text-brand" />}

@@ -16,11 +16,31 @@ const GAIN_HOT = "#81b64c";
 const INK_DARK = "#22201d";
 const INK_LIGHT = "#ece9e1";
 
-/** The solver's (user-positive) share of the bar, 0–100. 50 = dead equal. */
-function pct(cp: number) {
-  if (cp >= 3000) return 100;
-  if (cp <= -3000) return 0;
-  return Math.min(100, Math.max(0, 50 + (cp / 100 / 8) * 50));
+/**
+ * Ceiling for a position that is only *winning*, however winning that is.
+ *
+ * A full bar is a statement that the game is over, and it should only be made
+ * when it is: a forced mate, or a finished game. +11 with a queen up is not the
+ * same claim as mate in two, and a bar that cannot tell them apart has nothing
+ * left to say when the mate actually arrives.
+ */
+const MAX_UNDECIDED = 94;
+
+/** Centipawns at which the bar reaches that ceiling. */
+const FULL_AT = 1200;
+
+/**
+ * The solver's (user-positive) share of the bar, 0–100. 50 = dead equal.
+ *
+ * `mate` is the user-positive distance to mate (0 = already delivered), and
+ * `decided` marks a finished game. Either fills the bar outright; everything
+ * else is capped short of the ends no matter how large the evaluation.
+ */
+function pct(cp: number, mate?: number | null, decided?: boolean) {
+  if (decided) return cp >= 0 ? 100 : 0;
+  if (mate != null) return mate >= 0 ? 100 : 0;
+  const capped = Math.max(-FULL_AT, Math.min(FULL_AT, cp));
+  return 50 + (capped / FULL_AT) * (MAX_UNDECIDED - 50);
 }
 
 function usePrefersReducedMotion() {
@@ -102,6 +122,12 @@ interface PuzzleEvalBarProps {
   peakCp?: number;
   /** Label for that best-case evaluation — shown pinned at the bottom. */
   peakLabel?: string;
+  /** User-positive distance to mate for the current evaluation, if it is one. */
+  mate?: number | null;
+  /** ...and for the evaluation that was available. */
+  peakMate?: number | null;
+  /** The game itself is over (1-0 / 0-1), so the bar may legitimately fill. */
+  decided?: boolean;
   /** Keep the loss band sweeping (i.e. the puzzle is still unsolved). */
   loop?: boolean;
   /**
@@ -160,6 +186,9 @@ export function PuzzleEvalBar({
   label,
   peakCp,
   peakLabel,
+  mate = null,
+  peakMate = null,
+  decided = false,
   loop = false,
   step,
   isUserMove = false,
@@ -167,10 +196,10 @@ export function PuzzleEvalBar({
   className,
 }: PuzzleEvalBarProps) {
   const reduced = usePrefersReducedMotion();
-  const peak = pct(peakCp ?? cp);
+  const peak = pct(peakCp ?? cp, peakCp == null ? mate : peakMate, decided);
   // Until the engine has spoken the bar sits at what was available; the drop is
   // the first thing it does once it has real numbers.
-  const fill = ready ? pct(cp) : peak;
+  const fill = ready ? pct(cp, mate, decided) : peak;
 
   // A move that wins evaluation back replays the band in green, once.
   const stepRef = React.useRef(step);
@@ -197,8 +226,8 @@ export function PuzzleEvalBar({
     )
       return;
     firedRef.current = true;
-    setGain({ lo: pct(baselineRef.current), hi: pct(cp) });
-  }, [cp, step, isUserMove]);
+    setGain({ lo: pct(baselineRef.current), hi: pct(cp, mate, decided) });
+  }, [cp, step, isUserMove, mate, decided]);
 
   // Expiry owns its own effect: tying the timer to the one above would let each
   // deepening engine score cancel it through cleanup, and the band would stick.

@@ -10,6 +10,7 @@ import { ReviewBoard } from "@/components/review/review-board";
 import { PlaybackControls } from "@/components/review/playback-controls";
 import { CoachBubble } from "@/components/review/coach-bubble";
 import { EvalGraph } from "@/components/review/eval-graph";
+import { TrainingList } from "@/components/review/training-list";
 import { evalBarLabel } from "@/components/review/eval-bar";
 import { MoveListNav } from "@/components/review/move-list-nav";
 import { OverviewStats } from "@/components/review/overview-stats";
@@ -199,9 +200,12 @@ export function GameReview({
   model = reviewModel,
   /** Shown while a game pulled off Chess.com is still being analysed. */
   analysing,
+  /** The archived game this is, so the end-of-review list can link to its puzzles. */
+  gameId,
 }: {
   model?: ReviewModel;
   analysing?: { done: number; total: number } | null;
+  gameId?: string;
 } = {}) {
   const N = model.plies.length;
   const notablePlies = React.useMemo(() => notablePliesOf(model), [model]);
@@ -502,13 +506,39 @@ export function GameReview({
               </div>
             </div>
 
-            {/* Scrolling — the move list is the only scrollable region */}
-            <MoveListNav
-              model={model}
-              currentPly={currentPly}
-              onSeek={seek}
-              className="min-h-0 max-h-[52vh] flex-1 px-2 py-1 lg:max-h-none"
-            />
+            {/* Scrolling — the move list, and at the end of it, what to do next */}
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+              <MoveListNav
+                model={model}
+                currentPly={currentPly}
+                onSeek={seek}
+                className="px-2 py-1"
+              />
+              {/* The game is over: the panel stops narrating and starts
+                  offering. "Solve game puzzles" is this whole feature's front
+                  door, so it sits where Chess.com puts its training list. */}
+              {currentPly >= N && (
+                <div className="space-y-2.5 px-5 pb-4 pt-2">
+                  <TrainingList gameId={gameId} />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => seek(0)}
+                      className="flex h-11 flex-1 items-center justify-center gap-2 rounded-[8px] bg-white/[0.06] text-[14px] font-semibold text-ink transition-colors hover:bg-white/[0.1]"
+                    >
+                      <ArrowLeft className="size-4" />
+                      Highlights
+                    </button>
+                    <button
+                      type="button"
+                      className="h-11 flex-1 rounded-[8px] bg-white/[0.06] text-[14px] font-semibold text-ink transition-colors hover:bg-white/[0.1]"
+                    >
+                      New 15 + 10
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Sticky bottom — eval graph, playback controls, actions */}
             <div className="shrink-0 space-y-2.5 border-t border-line/40 px-5 pb-3 pt-3">
