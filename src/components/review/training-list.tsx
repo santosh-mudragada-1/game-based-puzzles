@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
  * the question stops being "what happened" and becomes "what now".
  */
 
-const ROWS: {
+export const TRAINING_ROWS: {
   key: string;
   label: string;
   icon: string;
@@ -39,26 +39,45 @@ const ROWS: {
 
 export function TrainingList({
   gameId,
+  highlight,
   className,
 }: {
   /** Deep-links "Solve game puzzles" straight into this game's own set. */
   gameId?: string;
+  /**
+   * Index of the row Next has walked to, or −1 before it has started.
+   *
+   * Pressing Next at the end of the game steps down this list rather than doing
+   * nothing: the review has run out of moves to talk about, so it starts
+   * offering what to do next, one at a time.
+   */
+  highlight?: number;
   className?: string;
 }) {
   return (
     <div className={cn("space-y-0.5", className)}>
-      {ROWS.map((r) => {
+      {TRAINING_ROWS.map((r, i) => {
+        const lit = highlight === i;
         const inner = (
           <>
             <Image src={r.icon} width={24} height={24} alt="" className="shrink-0" />
-            <span className="flex-1 text-[15px] font-semibold text-ink">
+            <span
+              className={cn(
+                "flex-1 text-[15px] font-semibold",
+                lit ? "text-white" : "text-ink",
+              )}
+            >
               {r.label}
             </span>
             {r.locked && <Lock className="size-[18px] shrink-0 text-ink-faint" />}
           </>
         );
-        const shell =
-          "flex w-full items-center gap-3 rounded-[8px] bg-white/[0.04] px-4 py-3 text-left transition-colors";
+        const shell = cn(
+          "flex w-full items-center gap-3 rounded-[8px] px-4 py-3 text-left transition-colors",
+          lit
+            ? "bg-brand/15 ring-1 ring-brand/70"
+            : "bg-white/[0.04]",
+        );
 
         if (r.href && !r.locked) {
           return (

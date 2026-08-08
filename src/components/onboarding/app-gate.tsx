@@ -23,10 +23,6 @@ export function AppGate({ children }: { children: React.ReactNode }) {
   const { sweep } = useReviews();
 
   const onWelcome = pathname === WELCOME_PATH;
-  const fetching = status === "loading";
-  /** The whole ten-game window has to be through before the app opens. */
-  const reviewing = Boolean(profile) && !sweep.settled;
-  const busy = fetching || reviewing;
 
   /** False until this route is known to be showable — the app stays unmounted. */
   const [open, setOpen] = React.useState(false);
@@ -47,9 +43,19 @@ export function AppGate({ children }: { children: React.ReactNode }) {
     }
   }, [promptNonce]);
 
+  /*
+    Having an account is the whole test.
+
+    This used to also wait on the sweep, which meant every reload of a fully
+    cached account was thrown out to /welcome to watch "Analysing your last 10
+    games" for five seconds before being let back in — analysing nothing, since
+    the answers were already on disk. The wait belongs to setting up, and
+    setting up happens on /welcome, which holds people there itself. Anyone who
+    already has an account has already been through it.
+  */
   React.useEffect(() => {
     if (onWelcome || !ready) return;
-    if (openedRef.current || read(SKIP_KEY) || (profile && !busy)) {
+    if (openedRef.current || read(SKIP_KEY) || profile) {
       openedRef.current = true;
       setOpen(true);
       return;
@@ -58,7 +64,7 @@ export function AppGate({ children }: { children: React.ReactNode }) {
     setOpen(false);
     write(RETURN_KEY, pathname);
     router.replace(WELCOME_PATH);
-  }, [onWelcome, ready, profile, busy, pathname, router]);
+  }, [onWelcome, ready, profile, pathname, router]);
 
   if (onWelcome) return <>{children}</>;
   // A plain field of the app's own background: no logo, no spinner, no wait

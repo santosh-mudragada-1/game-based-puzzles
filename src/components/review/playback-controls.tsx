@@ -15,6 +15,8 @@ interface PlaybackControlsProps {
   onToggle?: () => void;
   onNext?: () => void;
   onLast?: () => void;
+  /** The game is over — forward has nowhere left to go. */
+  atEnd?: boolean;
   className?: string;
 }
 
@@ -33,6 +35,7 @@ export function PlaybackControls({
   onToggle,
   onNext,
   onLast,
+  atEnd = false,
   className,
 }: PlaybackControlsProps) {
   return (
@@ -57,7 +60,8 @@ export function PlaybackControls({
         type="button"
         aria-label={playing ? "Pause" : "Play"}
         onClick={onToggle}
-        className={CONTROL_BTN}
+        disabled={atEnd}
+        className={cn(CONTROL_BTN, atEnd && "pointer-events-none opacity-40")}
       >
         {playing ? (
           <Pause className="fill-current" strokeWidth={0} />
@@ -69,7 +73,8 @@ export function PlaybackControls({
         type="button"
         aria-label="Next move"
         onClick={onNext}
-        className={CONTROL_BTN}
+        disabled={atEnd}
+        className={cn(CONTROL_BTN, atEnd && "pointer-events-none opacity-40")}
       >
         <ChevronRight strokeWidth={2.5} />
       </button>
@@ -77,7 +82,8 @@ export function PlaybackControls({
         type="button"
         aria-label="Last move"
         onClick={onLast}
-        className={CONTROL_BTN}
+        disabled={atEnd}
+        className={cn(CONTROL_BTN, atEnd && "pointer-events-none opacity-40")}
       >
         <ChevronLast strokeWidth={2.5} />
       </button>

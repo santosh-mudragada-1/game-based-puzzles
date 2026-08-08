@@ -5,12 +5,13 @@ import Image from "next/image";
 import { Heart, Lightbulb, ArrowLeft, ArrowRight, Share2 } from "lucide-react";
 
 import { ICON, moveTypeIcon } from "@/lib/assets";
+import { usePlan } from "@/hooks/use-plan";
 import { Toast } from "@/components/shared/toast";
 import { ReviewBoard } from "@/components/review/review-board";
 import { PlaybackControls } from "@/components/review/playback-controls";
 import { CoachBubble } from "@/components/review/coach-bubble";
 import { EvalGraph } from "@/components/review/eval-graph";
-import { TrainingList } from "@/components/review/training-list";
+import { TrainingList, TRAINING_ROWS } from "@/components/review/training-list";
 import { evalBarLabel } from "@/components/review/eval-bar";
 import { MoveListNav } from "@/components/review/move-list-nav";
 import { OverviewStats } from "@/components/review/overview-stats";
@@ -207,6 +208,7 @@ export function GameReview({
   analysing?: { done: number; total: number } | null;
   gameId?: string;
 } = {}) {
+  const { setPlan } = usePlan();
   const N = model.plies.length;
   const notablePlies = React.useMemo(() => notablePliesOf(model), [model]);
   const [currentPly, setCurrentPly] = React.useState(0);
@@ -325,8 +327,31 @@ export function GameReview({
     showToast("Game link copied to clipboard");
   };
 
+  /*
+    Next, at the end of the game.
+
+    There are no more moves to step to, so the button starts walking the
+    training list instead — Openings, then the game's own puzzles, then the
+    locked drills — highlighting one at a time. On the last of them it has
+    nothing left to offer and gives way to the upgrade button.
+  */
+  const [trainingStep, setTrainingStep] = React.useState(-1);
+  const atEnd = currentPly >= N;
+  const lastTrainingStep = TRAINING_ROWS.length - 1;
+  const walkingTraining = atEnd && trainingStep >= 0;
+  const trainingDone = trainingStep >= lastTrainingStep;
+
+  // Stepping back into the game puts the list away.
+  React.useEffect(() => {
+    if (!atEnd) setTrainingStep(-1);
+  }, [atEnd]);
+
   // The top "Next" button plays forward to the next important move.
   const goNextImportant = () => {
+    if (atEnd) {
+      setTrainingStep((s) => Math.min(s + 1, lastTrainingStep));
+      return;
+    }
     const next = notablePlies.find((p) => p > currentPly);
     setBestShown(false);
     setExplainShown(false);
@@ -376,6 +401,19 @@ export function GameReview({
   const renderAction = (a: TopAction) => {
     switch (a) {
       case "next":
+        // Walked to the end of the training list: the last drill is premium, so
+        // the only thing left worth offering is the way to unlock it.
+        if (trainingDone) {
+          return (
+            <TopButton
+              key="upgrade"
+              green
+              icon={<Image src={ICON.upgrade} width={18} height={18} alt="" />}
+              label="Go Premium"
+              onClick={() => setPlan("premium")}
+            />
+          );
+        }
         // When Share is the primary (brilliant/great), Next drops to secondary.
         return (
           <TopButton
@@ -519,7 +557,7 @@ export function GameReview({
                   door, so it sits where Chess.com puts its training list. */}
               {currentPly >= N && (
                 <div className="space-y-2.5 px-5 pb-4 pt-2">
-                  <TrainingList gameId={gameId} />
+                  <TrainingList gameId={gameId} highlight={trainingStep} />
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -557,6 +595,7 @@ export function GameReview({
                 }}
                 onNext={() => seek(currentPly + 1)}
                 onLast={() => seek(N)}
+                atEnd={atEnd}
               />
               <ReviewBottomBar onShare={handleShare} />
             </div>
