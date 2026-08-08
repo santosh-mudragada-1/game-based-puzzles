@@ -26,8 +26,24 @@ export function PreviewCard({
   children: ReactNode;
 }) {
   return (
-    <div className="flex w-[248px] shrink-0 flex-col overflow-clip rounded-[5px] bg-gradient-to-b from-white/[0.1] to-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_1px_2px_rgba(0,0,0,0.14),0_2px_4px_rgba(0,0,0,0.1)] transition-colors hover:from-white/[0.13] hover:to-white/[0.07]">
-      <div className="w-full">
+    <div className="relative flex w-[248px] shrink-0 flex-col overflow-clip rounded-[5px] bg-gradient-to-b from-white/[0.1] to-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_1px_2px_rgba(0,0,0,0.14),0_2px_4px_rgba(0,0,0,0.1)] transition-colors hover:from-white/[0.13] hover:to-white/[0.07]">
+      {/*
+        The whole card is the link, not just the button.
+
+        A board, a progress meter and a button that all describe one destination
+        should not have one clickable third. The overlay sits under the button
+        (which has its own link and a higher layer), so the button still works
+        and everything around it does too.
+      */}
+      {actionHref && (
+        <Link
+          href={actionHref}
+          aria-label={action}
+          className="absolute inset-0 z-0"
+          tabIndex={-1}
+        />
+      )}
+      <div className="pointer-events-none w-full">
         <MiniBoard
           fen={fen}
           orientation={orientation}
@@ -36,11 +52,13 @@ export function PreviewCard({
         />
       </div>
       <div className="flex flex-1 flex-col p-4">
-        <div className="mb-3 min-w-0">{children}</div>
+        <div className="pointer-events-none relative z-[1] mb-3 min-w-0">
+          {children}
+        </div>
         <Button
           variant={actionVariant}
           size="md"
-          className="mt-auto h-12 w-full text-[17px]"
+          className="relative z-[1] mt-auto h-12 w-full text-[17px]"
           asChild={!!actionHref}
         >
           {actionHref ? <Link href={actionHref}>{action}</Link> : action}

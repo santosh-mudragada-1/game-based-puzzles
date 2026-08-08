@@ -54,6 +54,22 @@ export function dayLabel(key: string): string {
   });
 }
 
+/**
+ * How to refer to a day in a sentence: "today's puzzles", "yesterday's
+ * puzzles", or "this day's puzzles" for anything further back. Naming the two
+ * days a person actually thinks of by name is most of what makes a diary read
+ * like one.
+ */
+export function daysPossessive(key: string | null): string {
+  if (!key) return "this day's";
+  const now = new Date();
+  if (key === dayKey(now)) return "today's";
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (key === dayKey(yesterday)) return "yesterday's";
+  return "this day's";
+}
+
 export function VersionProvider({ children }: { children: React.ReactNode }) {
   const [version, setVersionState] = React.useState<PuzzleVersion>("v1");
   const [day, setDay] = React.useState<string | null>(null);

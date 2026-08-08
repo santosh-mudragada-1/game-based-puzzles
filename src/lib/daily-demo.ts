@@ -36,6 +36,16 @@ function seeded(str: string): () => number {
   };
 }
 
+/** Fisher–Yates, driven by the seeded stream so the order is reproducible. */
+function shuffle<T>(items: T[], rand: () => number): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 const key = (y: number, m: number, d: number) =>
   `${y}-${`${m + 1}`.padStart(2, "0")}-${`${d}`.padStart(2, "0")}`;
 
@@ -63,19 +73,32 @@ export function demoSchedule(
         ? 0
         : today.getDate();
 
+  /*
+    Dealt, not sampled.
+
+    The pool is shuffled once and handed out in order, so a puzzle appears on
+    exactly one day and never twice in the month. When the deck runs out the
+    remaining days simply have nothing in them — a short month of distinct
+    puzzles is a better prototype than a full one that repeats itself, because
+    the repeat is the thing a viewer notices and it is not part of the idea.
+  */
+  const deck = shuffle(source, seeded(`deck-${year}`));
   let cursor = 0;
-  for (let d = 1; d <= last; d++) {
+
+  // Dealt backwards from today. The deck is finite, so somebody has to go
+  // without — and it should be a fortnight ago, not this morning. Today is the
+  // day the feature is about.
+  for (let d = last; d >= 1 && cursor < deck.length; d--) {
     const day = key(year, august, d);
     const rand = seeded(day);
     if (rand() < REST_DAY_CHANCE) continue; // a day off
 
-    const count = 1 + Math.floor(rand() * MAX_PER_DAY);
-    const picked: SolvePuzzle[] = [];
-    for (let i = 0; i < count; i++) {
-      const p = source[cursor % source.length];
-      cursor++;
-      picked.push({ ...p, id: `${p.id}@${day}`, playedOn: day });
-    }
+    const want = 1 + Math.floor(rand() * MAX_PER_DAY);
+    const take = Math.min(want, deck.length - cursor);
+    const picked = deck
+      .slice(cursor, cursor + take)
+      .map((p) => ({ ...p, id: `${p.id}@${day}`, playedOn: day }));
+    cursor += take;
     out.set(day, picked);
   }
   return out;

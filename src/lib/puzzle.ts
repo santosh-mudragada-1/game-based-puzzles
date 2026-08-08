@@ -70,6 +70,14 @@ export function checkedKingSquare(fen: string): string | null {
  * game result on actual checkmate, "M{n}" for a genuine forced mate, and a
  * signed pawn value otherwise — so it never claims "1-0" or "M1" incorrectly.
  */
+/**
+ * The number on the evaluation bar.
+ *
+ * Always a magnitude, never signed. A bar has two ends and the number sits at
+ * the end that is winning — which is how the advantage is expressed, so
+ * repeating it as "+" or "−" says the same thing twice, and "−5.0" on your side
+ * of the bar says it wrongly. Whose number it is comes from where it is drawn.
+ */
 export function evalLabel(
   cp: number,
   mate: number | null,
@@ -77,8 +85,8 @@ export function evalLabel(
   userSide: PieceColor,
 ): string {
   if (isMate) return userSide === "white" ? "1-0" : "0-1";
-  if (mate != null) return `${mate < 0 ? "−" : ""}M${Math.abs(mate)}`;
+  if (mate != null) return `M${Math.abs(mate)}`;
   const p = cp / 100;
   if (Math.abs(p) < 0.05) return "0.0";
-  return `${p > 0 ? "+" : "−"}${Math.abs(p).toFixed(1)}`;
+  return Math.abs(p).toFixed(1);
 }

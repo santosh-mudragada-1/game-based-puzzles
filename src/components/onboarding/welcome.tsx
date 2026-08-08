@@ -82,9 +82,15 @@ export function WelcomeFlow() {
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const fetching = status === "loading";
-  /** Games read before the door opens; the rest carry on behind the app. */
-  const firstBatch = sweep.firstBatch;
-  const reviewing = firstBatch > 0 && sweep.done < firstBatch;
+  /**
+   * The whole window, not a first handful.
+   *
+   * Every one of the ten games is read and mined before the app opens, so the
+   * number on the puzzles page is the final number. Handing over early and
+   * letting the set fill in behind meant arriving at "0/2" seconds after being
+   * told the puzzles were being generated.
+   */
+  const reviewing = Boolean(profile) && !sweep.settled;
   const busy = fetching || reviewing;
 
   /*
@@ -97,15 +103,27 @@ export function WelcomeFlow() {
     the page's own markup puts it on screen with the HTML instead. Anyone with a
     remembered account is held on their own page by the gate and never sees this.
   */
+  /*
+    The tour goes *first*, then whatever is left of the wait.
+
+    Reading the three screens takes about as long as the archive takes to
+    arrive, so the explanation and the wait overlap instead of running back to
+    back. Only the initial fetch comes before it — there is nothing to explain
+    until we know whose games these are.
+  */
   const phase: "connect" | "loading" | "tour" | null = !ready
     ? "connect"
-    : busy
-      ? "loading"
-      : !profile
-        ? "connect"
+    : !profile
+      ? fetching
+        ? "loading"
+        : "connect"
+      : fetching
+        ? "loading"
         : connectedHere && !tourDone
           ? "tour"
-          : null;
+          : reviewing
+            ? "loading"
+            : null;
 
   /** Back to wherever they were headed when setup interrupted them. */
   const leave = React.useCallback(() => {
@@ -164,13 +182,16 @@ export function WelcomeFlow() {
     leave();
   };
 
-  /** Fetching fills the first half of the bar, reviewing the second. */
+  /** Fetching fills the first third of the bar, the ten games the rest. */
   const pct = fetching
     ? progress.total > 0
-      ? Math.round((progress.done / progress.total) * 50)
-      : 6
+      ? Math.round((progress.done / progress.total) * 30)
+      : 5
     : reviewing
-      ? 50 + Math.round((sweep.done / firstBatch) * 50)
+      ? 30 +
+        Math.round(
+          (Math.min(sweep.done, sweep.target) / Math.max(1, sweep.target)) * 65,
+        )
       : 100;
 
   return (
@@ -190,12 +211,22 @@ export function WelcomeFlow() {
         ) : phase ? (
           <motion.div
             key="card"
-            className="w-full max-w-[440px] overflow-hidden rounded-[12px] border border-line/60 bg-surface shadow-pop"
+            /*
+              One height for every state.
+
+              The card is centred in the viewport, so the form and the progress
+              screen being ten pixels apart meant the whole thing slid upward as
+              it swapped — small, but it happens right under the cursor and
+              reads as the page flinching. Pinned, nothing moves but the words.
+            */
+            className="flex w-full max-w-[440px] min-h-[524px] flex-col justify-center overflow-hidden rounded-[12px] border border-line/60 bg-surface shadow-pop"
             // No entrance. The card is the first thing on the page and it is
             // there in the markup, so animating it in would mean animating it
             // *after* it was already visible — which is the flinch people saw.
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            // A fade, not a shrink. Scaling the card on the way out changed its
+            // height, which moved everything still on screen behind it.
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22 }}
           >
             <div className="px-7 pb-7 pt-8">
               <Logo height={26} />
@@ -206,7 +237,10 @@ export function WelcomeFlow() {
                     ? "Analysing your last 10 games"
                     : "Connect your Chess.com"}
               </h2>
-              <p className="mt-2.5 text-[14px] leading-snug text-ink-muted">
+              {/* A floor under the copy: the fetching and analysing sentences
+                  are different lengths, and a card that resizes between them
+                  jumps on screen because it is vertically centred. */}
+              <p className="mt-2.5 min-h-[56px] text-[14px] leading-snug text-ink-muted">
                 {fetching
                   ? "Pulling your archive straight from Chess.com so every puzzle comes from a game you actually played."
                   : reviewing
@@ -251,7 +285,7 @@ export function WelcomeFlow() {
                   <AnimatePresence mode="wait">
                     <motion.p
                       key={fact}
-                      className="mt-5 min-h-[64px] rounded-[8px] bg-black/25 px-3.5 py-3 text-center text-[12.5px] font-medium leading-relaxed text-ink-soft"
+                      className="mt-5 flex h-[92px] items-center justify-center rounded-[8px] bg-black/25 px-3.5 text-center text-[12.5px] font-medium leading-relaxed text-ink-soft"
                       initial={{ opacity: 0, y: 4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}

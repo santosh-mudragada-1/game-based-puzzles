@@ -24,8 +24,8 @@ export function AppGate({ children }: { children: React.ReactNode }) {
 
   const onWelcome = pathname === WELCOME_PATH;
   const fetching = status === "loading";
-  /** Games read before the door opens; the rest carry on behind the app. */
-  const reviewing = sweep.firstBatch > 0 && sweep.done < sweep.firstBatch;
+  /** The whole ten-game window has to be through before the app opens. */
+  const reviewing = Boolean(profile) && !sweep.settled;
   const busy = fetching || reviewing;
 
   /** False until this route is known to be showable — the app stays unmounted. */

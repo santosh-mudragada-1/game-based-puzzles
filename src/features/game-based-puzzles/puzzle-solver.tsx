@@ -37,7 +37,7 @@ import {
   coachIntro,
 } from "@/data/solve-puzzles";
 import { useActivePuzzles } from "@/hooks/use-active-puzzles";
-import { useVersion, V1_WINDOW } from "@/hooks/use-version";
+import { useVersion, V1_WINDOW, daysPossessive } from "@/hooks/use-version";
 import { DayPicker } from "@/components/puzzles/day-picker";
 import { useChessAccount } from "@/hooks/use-chess-account";
 import { useOpponents } from "@/hooks/use-opponents";
@@ -1276,7 +1276,11 @@ export function PuzzleSolver() {
             ? `${queue.length} ready so far — still reviewing your games for more.`
             : version === "v2"
               ? // The diary reading: one day's chess, and what it left behind.
-                `${queue.length} ${queue.length === 1 ? "puzzle" : "puzzles"} generated from your games that day.`
+                `${queue.length} ${queue.length === 1 ? "puzzle" : "puzzles"} generated from your games ${
+                  daysPossessive(day) === "this day's"
+                    ? "that day"
+                    : daysPossessive(day).replace("'s", "")
+                }.`
               : `${queue.length} ${queue.length === 1 ? "puzzle" : "puzzles"} from your last ${V1_WINDOW} games.`;
 
   const coachText = !puzzle
@@ -1392,7 +1396,9 @@ export function PuzzleSolver() {
             intro={intro}
             total={queueTotal}
             progressNoun={
-              version === "v2" ? "completed from this day's puzzles" : "completed"
+              version === "v2"
+                ? `completed from ${daysPossessive(day)} puzzles`
+                : "completed"
             }
             dayPicker={
               version === "v2" && live ? (

@@ -50,10 +50,18 @@ export function useActivePuzzles(): ActivePuzzles {
     wait for. It is a prototype of a shape, and the shape is legible whether or
     not the dates it is drawn on are the ones you actually played.
   */
-  const schedule = React.useMemo(
-    () => (version === "v2" ? demoSchedule(pool.length ? pool : solvePuzzles) : new Map<string, SolvePuzzle[]>()),
-    [version, pool],
-  );
+  const schedule = React.useMemo(() => {
+    if (version !== "v2") return new Map<string, SolvePuzzle[]>();
+    // Your own games first, then the authored set behind them — enough distinct
+    // material for a month that never shows the same position twice.
+    const seen = new Set<string>();
+    const source = [...pool, ...solvePuzzles].filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+    return demoSchedule(source);
+  }, [version, pool]);
 
   /** Days that hold puzzles, newest first. */
   const days = React.useMemo(
@@ -90,7 +98,10 @@ export function useActivePuzzles(): ActivePuzzles {
   return {
     puzzles: list,
     live,
-    mining,
+    // A v2 day is complete the moment it is dealt. The background sweep may
+    // still be running for v1, but saying "still reviewing for more" over a
+    // finished day promises puzzles that are never going to arrive.
+    mining: version === "v2" ? false : mining,
     // Both versions report what the games actually held. There is no daily
     // quota to fall short of any more — a day is as long as it is.
     target: list.length,

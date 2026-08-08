@@ -97,10 +97,19 @@ export interface SweepState {
   done: number;
   running: boolean;
   /**
-   * Games in the first batch — what the loading screen waits for. The rest of
-   * the sweep runs behind the dashboard.
+   * Games in the first batch — kept for the progress bar's second half.
    */
   firstBatch: number;
+  /**
+   * True once the window has been planned *and* worked through: every game
+   * read and every puzzle mined out of them.
+   *
+   * The loading screen waits on this rather than on a first handful. Letting go
+   * earlier meant the screen said "generating puzzles" and then handed over a
+   * set of two that quietly grew afterwards — which reads as the count being
+   * wrong, not as work still happening.
+   */
+  settled: boolean;
 }
 
 interface ReviewsValue {
@@ -217,6 +226,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     done: 0,
     running: false,
     firstBatch: 0,
+    settled: false,
   });
 
   const lanesRef = React.useRef<Lane[]>([]);
@@ -601,7 +611,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
               leniently, were both ways of hitting a number — and the number is
               not the point. Ten games contain what they contain.
             */
-            setSweep((s) => ({ ...s, running: false }));
+            setSweep((s) => ({ ...s, running: false, settled: true }));
           }
         }
       })();
@@ -701,7 +711,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
       setReviews({});
       setPuzzles([]);
       setGamePuzzles({});
-      setSweep({ target: 0, done: 0, running: false, firstBatch: 0 });
+      setSweep({ target: 0, done: 0, running: false, firstBatch: 0, settled: false });
 
       /*
         Pick up where the last visit left off. Every restored game goes into
@@ -793,7 +803,13 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     const set = sweepSet(games).filter(
       (g) => !plannedIdsRef.current.has(g.id),
     );
-    if (set.length === 0) return;
+    if (set.length === 0) {
+      // Everything in the window is already known — from this session or the
+      // last one. There is nothing to wait for.
+      if (queueRef.current.length === 0)
+        setSweep((s) => (s.settled ? s : { ...s, settled: true }));
+      return;
+    }
 
     for (const g of set) {
       if (queuedRef.current < FIRST_BATCH) firstBatchRef.current.add(g.id);
@@ -808,6 +824,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
       done: s.done,
       running: true,
       firstBatch: Math.min(FIRST_BATCH, queuedRef.current),
+      settled: false,
     }));
     setReviews((r) => {
       const next = { ...r };

@@ -248,14 +248,29 @@ export function PuzzleEvalBar({
   // While holding, the bar is showing the peak — so the number must too.
   const primary = ready ? label : (peakLabel ?? label);
 
-  // With no gap the single number sits at the bottom, Chess.com style; otherwise
-  // it rides the fill boundary, clear of the bar's ends and the bottom label.
-  const labelAt = showPeak ? Math.min(93, Math.max(11, fill)) : 0;
+  /**
+   * Whose end the number belongs at.
+   *
+   * The label carries no sign, so its position is what says who is better: a
+   * value below the halfway line is the opponent's advantage and is written at
+   * the top, in their territory, the way Chess.com's own bar does it.
+   */
+  const theirs = fill < 50 - 0.5;
+
+  // With no gap the single number sits at the winning end; otherwise it rides
+  // the fill boundary, clear of the bar's ends and the bottom label.
+  const labelAt = showPeak
+    ? Math.min(93, Math.max(11, fill))
+    : theirs
+      ? 100
+      : 0;
   // The boundary label lands on the red or green band when there is one (both
   // light — needs dark ink) and on the bare dark background otherwise.
   const onLight = showPeak
     ? fill > 93 || gap || gain != null
-    : fill >= 6; // pinned at the bottom, so it's on the light fill
+    : theirs
+      ? false // pinned at the top, on the opponent's dark share
+      : fill >= 6; // pinned at the bottom, so it's on the light fill
 
   return (
     <div
@@ -315,7 +330,12 @@ export function PuzzleEvalBar({
       <span
         className="pointer-events-none absolute inset-x-0 text-center text-[10px] font-bold leading-none tabular-nums"
         style={{
-          bottom: showPeak ? `calc(${labelAt}% + 2px)` : "3px",
+          bottom: showPeak
+            ? `calc(${labelAt}% + 2px)`
+            : theirs
+              ? undefined
+              : "3px",
+          top: !showPeak && theirs ? "3px" : undefined,
           color: onLight ? INK_DARK : INK_LIGHT,
           transition: `bottom ${FILL_MS}ms cubic-bezier(0.22,1,0.36,1)`,
         }}
