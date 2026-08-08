@@ -20,7 +20,7 @@ import type { SolvePuzzle } from "@/types";
  * the difficulty rules, so changing those has to invalidate everything mined
  * under the old ones rather than serving them back for another visit.
  */
-const KEY = "gbp:reviews:v3";
+const KEY = "gbp:reviews:v4";
 
 /** Games kept, newest write last — a bound on how large this can grow. */
 const MAX_GAMES = 60;

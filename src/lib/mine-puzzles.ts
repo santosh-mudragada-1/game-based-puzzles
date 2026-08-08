@@ -29,7 +29,9 @@ import type {
  *    mate for a mating attack and a won piece for a combination, not five plies
  *    because five was the number;
  *  · nothing becomes a puzzle just because Stockfish prefers something. The
- *    answer has to be findable, singular, and worth finding.
+ *    answer has to be findable, singular, and worth finding — and the moment
+ *    has to have put the result in doubt. A faster mate declined, or a slower
+ *    road to the same won game, is not a mistake anybody needs drilling on.
  */
 
 /**
@@ -57,6 +59,17 @@ const DECISIVE = 400;
 const WINNING = 250;
 /** Centipawns: a position successfully held. */
 const HELD = -60;
+
+/**
+ * Above this, the move played kept the game won and there is nothing to fix.
+ *
+ * The same number a solved puzzle has to reach, used from the other side: if the
+ * position the member actually chose is already at the level we would call a
+ * puzzle *solved*, then asking them to solve it is asking them to be Stockfish.
+ * Trading into a won endgame instead of mating in three is good chess — it is
+ * how games are actually won, and a coach does not mark it wrong.
+ */
+const STILL_WINNING = DECISIVE;
 
 const CATEGORY_OF: Record<string, PuzzleCategory> = {
   blunder: "blunder",
@@ -192,6 +205,25 @@ export function findCandidates(
     const postCp = row.cp * sign;
     const preMate = preRow?.mate == null ? null : preRow.mate * sign;
     const hadMate = preMate != null && preMate > 0;
+    const postMate = row.mate == null ? null : row.mate * sign;
+
+    /*
+      Did missing this actually cost anything?
+
+      A puzzle has to be a moment where the result was put in doubt. Two things
+      are not that, however much evaluation the engine says they cost:
+
+      · a mate that is still a mate, only longer — the game is over either way,
+        and the difference is engine perfection, not chess;
+      · a move that left the position decisively won anyway. Choosing the safe
+        simplification over the flashy finish is how won games get won.
+
+      Both used to become puzzles, and being told you were "wrong" for winning a
+      won game is the least useful thing this feature could say to anybody.
+    */
+    const stillMating = postMate != null && postMate > 0;
+    if (stillMating || postCp >= STILL_WINNING) continue;
+
     const endgame = heavyCount(before) <= ENDGAME_PIECES;
     const openingPhase = i < OPENING_PLIES;
     // The move before this one was the opponent's; if they had just erred, the
